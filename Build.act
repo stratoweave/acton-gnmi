@@ -5,5 +5,10 @@ dependencies = {
         repo_url="https://github.com/actonlang/acton-grpc.git",
         url="https://github.com/actonlang/acton-grpc/archive/16146b00e85ca49bd710a15eb808265881b6407f.zip",
         hash="N-V-__8AADgfAACmWduesrNalE66-USXmMjgXV2pvGq6ZEqe"
+    ),
+    "yang": (
+        repo_url="https://github.com/orchestron-orchestrator/acton-yang.git",
+        url="https://github.com/orchestron-orchestrator/acton-yang/archive/a9e7a3acceeb62416334503ca68dbb2b458ead77.zip",
+        hash="N-V-__8AALMtIQCBWu4TAmFmhgbd5HUQbdtHNkT1QU7y3BbL"
     )
 }
