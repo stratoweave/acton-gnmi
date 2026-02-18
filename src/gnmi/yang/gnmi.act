@@ -1,0 +1,57 @@
+import gnmi.proto
+import base64
+
+from yang.identityref import Identityref, PartialIdentityref
+from yang.type import Decimal
+from yang.data import from_data, from_data_recursive, YangData, PathElement, YangValidationError, format_schema_path
+from yang.data import unwrap_key, coerce_integer_value, fqname, fq_list_keys, parse_qualified_name, user_order
+import yang.gdata
+import yang.schema
+
+extension gnmi.proto.Notification(YangData):
+
+    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> ?(op: ?str, val: ?value):
+        updates, deletes = select_notif_paths(self, name)
+        new_prefix = gnmi.proto.Path(self.prefix.elems.copy(), self.prefix.origin, self.prefix.target)
+        new_prefix.elems.append(gnmi.proto.PathElem(name, []))
+
+        if len(updates) > 0:
+            return None, gnmi.proto.Notification(self.timestamp, new_prefix, updates, deletes, self.atomic)
+        if len(deletes) > 0:
+            return "delete", gnmi.proto.Notification(self.timestamp, new_prefix, updates, deletes, self.atomic)
+        return None
+
+    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
+        new_path = path + [PathElement(schema)]
+        return []
+
+    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
+        new_path = path + [PathElement(schema)]
+
+    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
+        values: list[(op: ?str, t: str, val: ?value)] = []
+        return values
+
+def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (list[gnmi.proto.Update], list[gnmi.proto.Path]):
+
+    updates = []
+    deletes = []
+
+    for update in notification.update:
+        if update.path.elems[0].name == name:
+            updates.append(gnmi.proto.Update(gnmi.proto.Path(update.path.elems[1:], update.path.origin, update.path.target), update.val, update.duplicates))
+
+    for delete in notification.delete:
+        if delete.elems[0].name == name:
+            deletes.append(gnmi.proto.Path(delete.elems[1:], delete.origin, delete.target))
+
+    return updates, deletes
+
+def from_gnmi_notif(root: yang.schema.DRoot, data: gnmi.proto.Notification, loose: bool=False, root_path: list[str]=[]) -> yang.gdata.Container:
+    def type_narrower(v):
+        if isinstance(v, gnmi.proto.Notification):
+            return v
+        raise ValueError("Value is not a gnmi.proto.Notification: {type(v)}")
+
+    return from_data(root, data, type_narrower, loose, root_path)
+
