@@ -1,0 +1,81 @@
+import testing
+
+from gnmi.proto import Notification, Update, Path, PathElem
+from gnmi.proto import StringValue, DoubleValue, LeafListValue
+from gnmi.yang.gnmi import from_gnmi_notif
+
+import yang
+import yang.gdata
+
+from yang.data import YangValidationError
+from yang.identityref import Identityref, PartialIdentityref
+from yang.type import Decimal, Ranges
+
+def _test_y1_xml():
+    y1 = r"""module y1 {
+  namespace "urn:example:y1";
+  prefix y1;
+
+  container c1 {
+    description "Container 1";
+    leaf l1 {
+      type string;
+      description "Leaf 1";
+    }
+    list l2 {
+      key "k1";
+      leaf k1 {
+        type string;
+        description "Key 1";
+      }
+      leaf v1 {
+        type string;
+        description "Value 1";
+      }
+    }
+    leaf lrf2 {
+      type leafref {
+        path "/c1/l2/k1";
+      }
+    }
+    leaf-list ll1 {
+      type string;
+      description "Leaf List 1";
+    }
+    leaf-list ll3 {
+      type decimal64 {
+        fraction-digits 2;
+      }
+    }
+  }
+}"""
+
+#    xml_in = r"""<data>
+#<c1 xmlns="urn:example:y1">
+#  <l1>Value for l1</l1>
+#  <l2>
+#    <k1>Key 1</k1>
+#    <v1>Value for v1</v1>
+#  </l2>
+#  <lrf2>Key 1</lrf2>
+#  <ll1>Item 1</ll1>
+#  <ll1>Item 2</ll1>
+#  <ll3>3.14</ll3>
+#  <ll3>2.72</ll3>
+#</c1>
+#</data>""
+
+    notif_in = Notification(0, Path([], '', ''),
+                           [Update(Path([PathElem('c1', []), PathElem('l1', [])], '', ''), StringValue('Value for l1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('lrf2', []) ], '', ''), StringValue('Key 1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('ll1', []) ], '', ''), LeafListValue([StringValue('Item 1'), StringValue('Item 2')]), 0),
+                            Update(Path([PathElem('c1', []), PathElem('ll3', []) ], '', ''), LeafListValue([DoubleValue(3.14), DoubleValue(2.72)]), 0)
+                            ],
+                           [], False)
+
+    s = yang.compile([y1])
+    gd = from_gnmi_notif(s, notif_in)
+    return gd.prsrc()
+
