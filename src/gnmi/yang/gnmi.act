@@ -47,6 +47,96 @@ def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (lis
 
     return updates, deletes
 
+def try_parse_gnmi_value(gnmi_val: gnmi.proto.TypedValue, schema_node: yang.schema.DNodeLeaf, schema_type: yang.schema.DType, path: list[PathElement], root: yang.schema.DRoot) -> ?(t: str, val: value):
+    """Parse a textual value according to the provided schema type.
+
+    Returns:
+        (t, val): A typed tuple with the concrete type name and native value
+                  (e.g. ("uint8", 42)). For unions, returns the successful
+                  member type and parsed value.
+
+    Errors:
+        Raises YangValidationError with a message including the formatted
+        schema path (from the path parameter) and a textual description of the
+        expected type (including range constraints if present).
+    """
+    type_name = schema_type.builtin_type
+
+    if isinstance(schema_type, yang.schema.DTypeUnion):
+        for alt_type in schema_type.types:
+            try:
+                return try_parse_gnmi_value(gnmi_value, schema_node, alt_type, path, root)
+            except YangValidationError:
+                continue
+        if leaf_value is not None:
+            raise YangValidationError(path, schema_type, gnmi_value)
+        return None
+    elif isinstance(schema_type, yang.schema.DTypeEmpty):
+        # Empty leaf JSON encoding: [null]
+        if isinstance(gnmi_value, gnmi.proto.NotSetValue):
+            return (t=type_name, val=yang.gdata.Present())
+        raise YangValidationError(path, schema_type, leaf_value)
+
+    val: ?value = None
+    if isinstance(schema_type, yang.schema.DTypeString):
+        if isinstance(gnmi_value, gnmi.proto.StringValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeInteger):
+        if isinstance(gnmi_value, gnmi.proto.IntValue):
+            val = gnmi_value.value
+        elif isinstance(gnmi_value, gnmi.proto.UIntValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeEnum):
+        if isinstance(gnmi_value, gnmi.proto.StringValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeDecimal64):
+        if isinstance(gnmi_value, gnmi.proto.DecimalValue):
+            significand = bigint(gnmi_value.value.digits)
+            exponent = bigint(gnmi_value.value.precision)
+            val = Decimal(significand, exponent)
+        elif isinstance(gnmi_value, gnmi.proto.DoubleValue):
+            val = Decimal.try_parse(str(gnmi_value.value))
+        elif isinstance(gnmi_value, gnmi.proto.FloatValue):
+            val = Decimal.try_parse(str(gnmi_value.value))
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeBoolean):
+        if isinstance(gnmi_value, BoolValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeBinary):
+        if isinstance(gnmi_value, BytesValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeIdentityref):
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeLeafref):
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeInstanceIdentifier):
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeBits):
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+
+    if val is not None and schema_type.validate_value(val):
+        return (t=type_name, val=val)
+
+    raise YangValidationError(path, schema_type, leaf_value)
+
+    return None
+
+
 def from_gnmi_notif(root: yang.schema.DRoot, data: gnmi.proto.Notification, loose: bool=False, root_path: list[str]=[]) -> yang.gdata.Container:
     def type_narrower(v):
         if isinstance(v, gnmi.proto.Notification):
