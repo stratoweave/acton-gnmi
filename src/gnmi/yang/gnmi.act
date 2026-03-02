@@ -28,8 +28,28 @@ extension gnmi.proto.Notification(YangData):
     def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
         new_path = path + [PathElement(schema)]
 
+        updates, deletes = select_notif_paths(self, name)
+
+        if len(updates) == 1 and len(deletes) == 0:
+            tv = try_parse_gnmi_value(updates[0].val, schema, schema.type_, new_path, root)
+            if tv is not None:
+                return (op=None, t=tv.t, val=tv.val)
+
+        return None
+
+
     def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
+        new_path = path + [PathElement(schema)]
         values: list[(op: ?str, t: str, val: ?value)] = []
+
+        updates, deletes = select_notif_paths(self, name)
+
+        leaflist_path: ?gnmi.proto.Path = None
+        for update in updates:
+            tv = try_parse_gnmi_value(update.val, schema, schema.type_, new_path, root)
+            if tv is not None:
+                values.append((op=None, t=tv.t, val=tv.val))
+
         return values
 
 def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (list[gnmi.proto.Update], list[gnmi.proto.Path]):
