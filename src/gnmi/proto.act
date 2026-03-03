@@ -55,6 +55,28 @@ class PathElem:
             formatted_keys += f'[{key}={val}]'
         return f'/{self.name}{formatted_keys}'
 
+extension PathElem(Eq):
+
+    def __eq__(self, other) -> bool:
+        if self.name != other.name:
+            return False
+
+        if not (len(self.keys) == len(other.keys)):
+            return False
+
+        other_dict = dict(other.keys)
+
+        for key, value in self.keys:
+            other_val = other_dict.get(key)
+
+            if other_val is not None:
+                if other_val != value:
+                    return False
+            else:
+                return False
+
+        return True
+
 class Path:
     elems: list[PathElem]
     origin: str
@@ -71,6 +93,23 @@ class Path:
             xpath += str(elem)
 
         return f'Path({xpath}, origin={self.origin}, target={self.target})'
+
+extension Path(Eq):
+    def __eq__(self, other):
+        if self.origin != other.origin:
+            return False
+
+        if self.target != other.target:
+            return False
+
+        if len(self.elems) != len(other.elems):
+            return False
+
+        for i in range(len(self.elems)):
+            if self.elems[i] != other.elems[i]:
+                return False
+
+        return True
 
 class ModelData:
     name: str
