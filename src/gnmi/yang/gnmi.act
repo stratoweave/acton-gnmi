@@ -46,6 +46,15 @@ extension gnmi.proto.Notification(YangData):
 
         leaflist_path: ?gnmi.proto.Path = None
         for update in updates:
+            if leaflist_path is not None:
+                if update.path != leaflist_path:
+                    # if the selected leaves don't have the same path,
+                    #  this isn't a leaflist
+                    values = []
+                    break
+            else:
+                leaflist_path = update.path
+
             tv = try_parse_gnmi_value(update.val, schema, schema.type_, new_path, root)
             if tv is not None:
                 values.append((op=None, t=tv.t, val=tv.val))
