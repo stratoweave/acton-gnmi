@@ -23,7 +23,39 @@ extension gnmi.proto.Notification(YangData):
 
     def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
         new_path = path + [PathElement(schema)]
-        return []
+
+        values: list[(op: ?str, key: dict[str, value], val: value)] = []
+
+        updates, deletes = select_notif_paths(self, name)
+
+        # Can't hash the key set but it would be efficient
+        #list_dict: dict[list[(str, str)], list[gnmi.proto.Update]] = {}
+
+        list_elem_leaves: list[list[gnmi.proto.Update]] = []
+
+        # prefix length will get us the index of the list element in the
+        #  schema path
+        path_idx = len(self.prefix.elems)
+        for update in updates:
+            elem_exists = False
+            for elem_leaves in list_elem_leaves:
+                if update.path.elems[path_idx] == elem_leaves[0].path.elems[path_idx]:
+                    elem_leaves.append(update)
+                    elem_exists = True
+
+            if not elem_exists:
+                list_elem_leaves.append([update])
+
+        for elem_leaves in list_elem_leaves:
+            new_prefix = gnmi.proto.Path(self.prefix.elems.copy(), self.prefix.origin, self.prefix.target)
+            new_prefix.elems.append(elem_leaves[0].path.elems[path_idx])
+
+            # XXX Convert the key in future iteration
+            key = {}
+
+            values.append((None, key, gnmi.proto.Notification(self.timestamp, new_prefix, elem_leaves, [], self.atomic)))
+
+        return values
 
     def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
         new_path = path + [PathElement(schema)]
