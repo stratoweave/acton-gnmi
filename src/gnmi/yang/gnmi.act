@@ -46,12 +46,26 @@ extension gnmi.proto.Notification(YangData):
             if not elem_exists:
                 list_elem_leaves.append([update])
 
+        schema_keys = {}
+        for child in schema.children:
+            if isinstance(child, yang.schema.DNodeLeaf):
+                if child.name in schema.key:
+                    schema_keys[child.name] = child
+
         for elem_leaves in list_elem_leaves:
             new_prefix = gnmi.proto.Path(self.prefix.elems.copy(), self.prefix.origin, self.prefix.target)
             new_prefix.elems.append(elem_leaves[0].path.elems[path_idx])
 
-            # XXX Convert the key in future iteration
             key = {}
+
+            for keyname, keyval in new_prefix.elems[-1].keys:
+                root = path[0].node
+                # This should always be true if I'm understanding
+                #  the path correctly
+                if isinstance(root, yang.schema.DRoot):
+                    tv = try_parse_leaf_value(keyval, schema_keys[keyname], schema_keys[keyname].type_, new_path, root)
+                    if tv is not None:
+                        key[keyname] = tv.val
 
             values.append((None, key, gnmi.proto.Notification(self.timestamp, new_prefix, elem_leaves, [], self.atomic)))
 
@@ -211,6 +225,85 @@ def try_parse_gnmi_value(gnmi_value: gnmi.proto.TypedValue, schema_node: yang.sc
         return (t=type_name, val=val)
 
     raise YangValidationError(path, schema_type, gnmi_value)
+
+    return None
+
+def try_parse_leaf_value(leaf_value: str, schema_node: yang.schema.DNodeLeaf, schema_type: yang.schema.DType, path: list[PathElement], root: yang.schema.DRoot) -> ?(t: str, val: value):
+    """Parse a textual value according to the provided schema type.
+
+    Returns:
+        (t, val): A typed tuple with the concrete type name and native value
+                  (e.g. ("uint8", 42)). For unions, returns the successful
+                  member type and parsed value.
+
+    Errors:
+        Raises YangValidationError with a message including the formatted
+        schema path (from the path parameter) and a textual description of the
+        expected type (including range constraints if present).
+    """
+    type_name = schema_type.builtin_type
+
+    if isinstance(schema_type, yang.schema.DTypeUnion):
+        for alt_type in schema_type.types:
+            try:
+                return try_parse_leaf_value(leaf_value, schema_node, alt_type, path, root)
+            except YangValidationError:
+                continue
+        if leaf_value is not None:
+            raise YangValidationError(path, schema_type, leaf_value)
+        return None
+    elif isinstance(schema_type, yang.schema.DTypeEmpty):
+        # Empty leaf JSON encoding: [null]
+        if leaf_value == "":
+            return (t=type_name, val=yang.gdata.Present())
+        raise YangValidationError(path, schema_type, leaf_value)
+
+    val: ?value = None
+    if isinstance(schema_type, yang.schema.DTypeString):
+        val = leaf_value
+    elif isinstance(schema_type, yang.schema.DTypeInteger):
+        val = int(leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeEnum):
+        val = leaf_value
+    elif isinstance(schema_type, yang.schema.DTypeDecimal64):
+        val = Decimal.try_parse(leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeBoolean):
+        if leaf_value == "true":
+            val = True
+        if leaf_value == "false":
+            val = False
+        else:
+            raise YangValidationError(path, schema_type, leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeBinary):
+        try:
+            val = base64.decode(leaf_value.encode())
+        except ValueError:
+            raise YangValidationError(path, schema_type, leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeIdentityref):
+        partial = Identityref.from_json(leaf_value)
+        res = yang.schema.complete_identityref(partial, root.identities, schema_node.module)
+        val = res.0
+    elif isinstance(schema_type, yang.schema.DTypeLeafref):
+        target_type = schema_type.target_type
+        if target_type is not None:
+            return try_parse_leaf_value(leaf_value, schema_node, target_type, path, root)
+        else:
+            raise YangValidationError(path, schema_type, leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeInstanceIdentifier):
+        val = leaf_value
+    elif isinstance(schema_type, yang.schema.DTypeBits):
+        bits_val = set(None)
+        for bit in leaf_value.split(" "):
+            if bit in schema_type.name_to_pos:
+                bits_val.add(bit)
+            else:
+                raise YangValidationError(path, schema_type, leaf_value)
+        val = bits_val
+
+    if val is not None and schema_type.validate_value(val):
+        return (t=type_name, val=val)
+
+    raise YangValidationError(path, schema_type, leaf_value)
 
     return None
 
