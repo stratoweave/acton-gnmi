@@ -114,11 +114,19 @@ def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (lis
 
     for update in notification.update:
         if update.path.elems[0].name == name:
-            updates.append(gnmi.proto.Update(gnmi.proto.Path(update.path.elems[1:], update.path.origin, update.path.target), update.val, update.duplicates))
+            if len(update.path.elems) > 1:
+                remaining_elems = update.path.elems[1:]
+            else:
+                remaining_elems = []
+            updates.append(gnmi.proto.Update(gnmi.proto.Path(remaining_elems, update.path.origin, update.path.target), update.val, update.duplicates))
 
     for delete in notification.delete:
         if delete.elems[0].name == name:
-            deletes.append(gnmi.proto.Path(delete.elems[1:], delete.origin, delete.target))
+            if len(delete.elems) > 1:
+                remaining_elems = delete.elems[1:]
+            else:
+                remaining_elems = []
+            deletes.append(gnmi.proto.Path(remaining_elems, delete.origin, delete.target))
 
     return updates, deletes
 
