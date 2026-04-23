@@ -6,10 +6,10 @@ version = 1
 path = [
     "Makefile",
     "*.mk",
-    "*.act.json",
+    "**/Build.act",
     "src/**",
     "test/**",
-
+    "**/snapshots/expected/**"
 ]
 SPDX-FileCopyrightText = "Deutsche Telekom AG"
 SPDX-License-Identifier = "BSD-3-Clause"
