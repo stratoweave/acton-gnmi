@@ -101,9 +101,13 @@ extension gnmi.proto.Notification(YangData):
             else:
                 leaflist_path = update.path
 
-            tv = try_parse_gnmi_value(update.val, schema, schema.type_, new_path, root)
-            if tv is not None:
-                values.append((op=None, t=tv.t, val=tv.val))
+            value = update.val
+            
+            if isinstance(value, gnmi.proto.LeafListValue):
+                for item in value.value:
+                    tv = try_parse_gnmi_value(item, schema, schema.type_, new_path, root)
+                    if tv is not None:
+                        values.append((op=None, t=tv.t, val=tv.val))
 
         return values
 
