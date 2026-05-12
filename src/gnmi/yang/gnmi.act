@@ -25,49 +25,71 @@ extension gnmi.proto.Notification(YangData):
         new_path = path + [PathElement(schema)]
 
         values: list[(op: ?str, key: dict[str, value], val: value)] = []
-
-        updates, deletes = select_notif_paths(self, name)
+        updates, deletes = select_notif_matches(self, name)
 
         # Can't hash the key set but it would be efficient
         #list_dict: dict[list[(str, str)], list[gnmi.proto.Update]] = {}
+        list_elems: list[gnmi.proto.PathElem] = []
+        list_elem_updates: list[list[gnmi.proto.Update]] = []
+        list_elem_deletes: list[list[gnmi.proto.Path]] = []
 
-        list_elem_leaves: list[list[gnmi.proto.Update]] = []
+        for match in updates:
+            elem_idx = -1
+            try:
+                elem_idx = list_elems.index(match.elem)
+            except KeyError:
+                pass
 
-        # prefix length will get us the index of the list element in the
-        #  schema path
-        path_idx = len(self.prefix.elems)
-        for update in updates:
-            elem_exists = False
-            for elem_leaves in list_elem_leaves:
-                if update.path.elems[path_idx] == elem_leaves[0].path.elems[path_idx]:
-                    elem_leaves.append(update)
-                    elem_exists = True
+            if elem_idx == -1:
+                list_elems.append(match.elem)
+                list_elem_updates.append([])
+                list_elem_deletes.append([])
+                elem_idx = len(list_elems) - 1
 
-            if not elem_exists:
-                list_elem_leaves.append([update])
+            list_elem_updates[elem_idx].append(match.update)
+
+        for match in deletes:
+            elem_idx = -1
+            try:
+                elem_idx = list_elems.index(match.elem)
+            except KeyError:
+                pass
+
+            if elem_idx == -1:
+                list_elems.append(match.elem)
+                list_elem_updates.append([])
+                list_elem_deletes.append([])
+                elem_idx = len(list_elems) - 1
+
+            list_elem_deletes[elem_idx].append(match.delete)
 
         schema_keys = {}
         for child in schema.children:
-            if isinstance(child, yang.schema.DNodeLeaf):
+            if isinstance(child, yang.schema.DLeaf):
                 if child.name in schema.key:
                     schema_keys[child.name] = child
 
-        for elem_leaves in list_elem_leaves:
+        # TODO: pass root argument to YangData.take_list as it is clearly needed here?!
+        root: ?yang.schema.DRoot = None
+        if len(path) > 0:
+            maybe_root = path[0].node
+            if isinstance(maybe_root, yang.schema.DRoot):
+                root = maybe_root
+
+        for i in range(len(list_elems)):
             new_prefix = gnmi.proto.Path(self.prefix.elems.copy(), self.prefix.origin, self.prefix.target)
-            new_prefix.elems.append(elem_leaves[0].path.elems[path_idx])
+            new_prefix.elems.append(list_elems[i])
 
             key = {}
 
             for keyname, keyval in new_prefix.elems[-1].keys:
-                root = path[0].node
-                # This should always be true if I'm understanding
-                #  the path correctly
-                if isinstance(root, yang.schema.DRoot):
-                    tv = try_parse_leaf_value(keyval, schema_keys[keyname], schema_keys[keyname].type_, new_path, root)
+                schema_key = schema_keys.get(keyname)
+                if root is not None and schema_key is not None:
+                    tv = try_parse_leaf_value(keyval, schema_key, schema_key.type_, new_path, root)
                     if tv is not None:
                         key[keyname] = tv.val
 
-            values.append((None, key, gnmi.proto.Notification(self.timestamp, new_prefix, elem_leaves, [], self.atomic)))
+            values.append((None, key, gnmi.proto.Notification(self.timestamp, new_prefix, list_elem_updates[i], list_elem_deletes[i], self.atomic)))
 
         return values
 
@@ -111,7 +133,7 @@ extension gnmi.proto.Notification(YangData):
 
         return values
 
-def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (list[gnmi.proto.Update], list[gnmi.proto.Path]):
+def select_notif_matches(notification: gnmi.proto.Notification, name: str) -> (list[(elem: gnmi.proto.PathElem, update: gnmi.proto.Update)], list[(elem: gnmi.proto.PathElem, delete: gnmi.proto.Path)]):
 
     updates = []
     deletes = []
@@ -122,7 +144,7 @@ def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (lis
                 remaining_elems = update.path.elems[1:]
             else:
                 remaining_elems = []
-            updates.append(gnmi.proto.Update(gnmi.proto.Path(remaining_elems, update.path.origin, update.path.target), update.val, update.duplicates))
+            updates.append((elem=update.path.elems[0], update=gnmi.proto.Update(gnmi.proto.Path(remaining_elems, update.path.origin, update.path.target), update.val, update.duplicates)))
 
     for delete in notification.delete:
         if delete.elems[0].name == name:
@@ -130,9 +152,16 @@ def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (lis
                 remaining_elems = delete.elems[1:]
             else:
                 remaining_elems = []
-            deletes.append(gnmi.proto.Path(remaining_elems, delete.origin, delete.target))
+            deletes.append((elem=delete.elems[0], delete=gnmi.proto.Path(remaining_elems, delete.origin, delete.target)))
 
-    return updates, deletes
+    return (updates, deletes)
+
+def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (list[gnmi.proto.Update], list[gnmi.proto.Path]):
+    updates, deletes = select_notif_matches(notification, name)
+    return (
+        [match.update for match in updates],
+        [match.delete for match in deletes]
+    )
 
 def try_parse_gnmi_value(gnmi_value: gnmi.proto.TypedValue, schema_node: yang.schema.DNodeLeaf, schema_type: yang.schema.DType, path: list[PathElement], root: yang.schema.DRoot) -> ?(t: str, val: value):
     """Parse a textual value according to the provided schema type.
@@ -327,4 +356,3 @@ def from_gnmi_notif(root: yang.schema.DRoot, data: gnmi.proto.Notification, loos
         raise ValueError("Value is not a gnmi.proto.Notification: {type(v)}")
 
     return from_data(root, data, type_narrower, loose, root_path)
-
