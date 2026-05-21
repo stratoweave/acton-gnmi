@@ -16,8 +16,8 @@ def _test_select_notif_paths():
 
     notif_in = Notification(0, Path([], '', ''),
                            [Update(Path([PathElem('c1', []), PathElem('l1', [])], '', ''), StringValue('Value for l1'), 0),
-                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
-                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0),
                             Update(Path([PathElem('c1', []), PathElem('lrf2', []) ], '', ''), StringValue('Key 1'), 0),
                             Update(Path([PathElem('c1', []), PathElem('ll1', []) ], '', ''), LeafListValue([StringValue('Item 1'), StringValue('Item 2')]), 0),
                             Update(Path([PathElem('c1', []), PathElem('ll3', []) ], '', ''), LeafListValue([DoubleValue(3.14), DoubleValue(2.72)]), 0)
@@ -30,7 +30,7 @@ def _test_select_notif_matches():
 
     notif_in = Notification(0, Path([], '', ''),
                            [Update(Path([PathElem('c1', []), PathElem('l1', [])], '', ''), StringValue('Value for l1'), 0),
-                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0)
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0)
                             ],
                            [Path([PathElem('c1', []), PathElem('l1', [])], '', '')], False)
 
@@ -83,8 +83,8 @@ def _test_y1_gnmi_take_container():
 
     notif_in = Notification(0, Path([], '', ''),
                            [Update(Path([PathElem('c1', []), PathElem('l1', [])], '', ''), StringValue('Value for l1'), 0),
-                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
-                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0),
                             Update(Path([PathElem('c1', []), PathElem('lrf2', []) ], '', ''), StringValue('Key 1'), 0),
                             Update(Path([PathElem('c1', []), PathElem('ll1', []) ], '', ''), LeafListValue([StringValue('Item 1'), StringValue('Item 2')]), 0),
                             Update(Path([PathElem('c1', []), PathElem('ll3', []) ], '', ''), LeafListValue([DoubleValue(3.14), DoubleValue(2.72)]), 0)
@@ -123,8 +123,8 @@ def _test_y1_gnmi_take_list():
 
     notif_in = Notification(0, Path([], '', ''),
                             [
-                            Update(Path([PathElem('l2', [('k1', 'A')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
-                            Update(Path([PathElem('l2', [('k1', 'A')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0)
+                            Update(Path([PathElem('l2', [('k1', 'Key 1')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
+                            Update(Path([PathElem('l2', [('k1', 'Key 1')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0)
                             ],
                            [], False)
 
@@ -141,7 +141,7 @@ def _test_y1_gnmi_take_list():
                     testing.assertEqual(len(list_val), 1)
                     list_notif = list_val[0].val
                     if isinstance(list_notif, Notification):
-                        testing.assertEqual(list_notif.prefix, Path([PathElem('l2', [('k1', 'A')])], '', ''))
+                        testing.assertEqual(list_notif.prefix, Path([PathElem('l2', [('k1', 'Key 1')])], '', ''))
                         testing.assertEqual(len(list_notif.update), 2)
                     else:
                         raise Exception()
@@ -254,8 +254,8 @@ def _test_y1_gnmi():
 
     notif_in = Notification(0, Path([], '', ''),
                            [Update(Path([PathElem('c1', []), PathElem('l1', [])], '', ''), StringValue('Value for l1'), 0),
-                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
-                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'A')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('k1', [])], '', ''), StringValue('Key 1'), 0),
+                            Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0),
                             Update(Path([PathElem('c1', []), PathElem('lrf2', []) ], '', ''), StringValue('Key 1'), 0),
                             Update(Path([PathElem('c1', []), PathElem('ll1', []) ], '', ''), LeafListValue([StringValue('Item 1'), StringValue('Item 2')]), 0),
                             Update(Path([PathElem('c1', []), PathElem('ll3', []) ], '', ''), LeafListValue([DoubleValue(3.14), DoubleValue(2.72)]), 0)
