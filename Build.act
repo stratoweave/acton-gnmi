@@ -3,7 +3,7 @@ fingerprint = 0x659dca899e170c17
 dependencies = {
     "grpc": (
         repo_url="https://github.com/actonlang/acton-grpc.git",
-        url="https://github.com/actonlang/acton-grpc/archive/76ce12c7908df794f0e46ffeba136c094656eba2.zip",
-        hash="N-V-__8AAO8eAABBTmPOrrxX5MzTy_g8a5_OFHAO8qkQ7GGn"
+        url="https://github.com/actonlang/acton-grpc/archive/16146b00e85ca49bd710a15eb808265881b6407f.zip",
+        hash="N-V-__8AADgfAACmWduesrNalE66-USXmMjgXV2pvGq6ZEqe"
     )
 }
