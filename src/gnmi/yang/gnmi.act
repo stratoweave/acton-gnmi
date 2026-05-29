@@ -1,0 +1,358 @@
+import gnmi.proto
+import base64
+
+from yang.identityref import Identityref, PartialIdentityref
+from yang.type import Decimal
+from yang.data import from_data, from_data_recursive, YangData, PathElement, YangValidationError, format_schema_path
+from yang.data import unwrap_key, coerce_integer_value, fqname, fq_list_keys, parse_qualified_name, user_order
+import yang.gdata
+import yang.schema
+
+extension gnmi.proto.Notification(YangData):
+
+    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, val: ?value):
+        updates, deletes = select_notif_paths(self, name)
+        new_prefix = gnmi.proto.Path(self.prefix.elems.copy(), self.prefix.origin, self.prefix.target)
+        new_prefix.elems.append(gnmi.proto.PathElem(name, []))
+
+        if len(updates) > 0:
+            return None, gnmi.proto.Notification(self.timestamp, new_prefix, updates, deletes, self.atomic)
+        if len(deletes) > 0:
+            return "delete", gnmi.proto.Notification(self.timestamp, new_prefix, updates, deletes, self.atomic)
+        return None
+
+    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
+        new_path = path + [PathElement(schema)]
+
+        values: list[(op: ?str, key: dict[str, value], val: value)] = []
+        updates, deletes = select_notif_matches(self, name)
+
+        # Can't hash the key set but it would be efficient
+        #list_dict: dict[list[(str, str)], list[gnmi.proto.Update]] = {}
+        list_elems: list[gnmi.proto.PathElem] = []
+        list_elem_updates: list[list[gnmi.proto.Update]] = []
+        list_elem_deletes: list[list[gnmi.proto.Path]] = []
+
+        for match in updates:
+            elem_idx = -1
+            try:
+                elem_idx = list_elems.index(match.elem)
+            except KeyError:
+                pass
+
+            if elem_idx == -1:
+                list_elems.append(match.elem)
+                list_elem_updates.append([])
+                list_elem_deletes.append([])
+                elem_idx = len(list_elems) - 1
+
+            list_elem_updates[elem_idx].append(match.update)
+
+        for match in deletes:
+            elem_idx = -1
+            try:
+                elem_idx = list_elems.index(match.elem)
+            except KeyError:
+                pass
+
+            if elem_idx == -1:
+                list_elems.append(match.elem)
+                list_elem_updates.append([])
+                list_elem_deletes.append([])
+                elem_idx = len(list_elems) - 1
+
+            list_elem_deletes[elem_idx].append(match.delete)
+
+        schema_keys = {}
+        for child in schema.children:
+            if isinstance(child, yang.schema.DLeaf):
+                if child.name in schema.key:
+                    schema_keys[child.name] = child
+
+        # TODO: pass root argument to YangData.take_list as it is clearly needed here?!
+        root: ?yang.schema.DRoot = None
+        if len(path) > 0:
+            maybe_root = path[0].node
+            if isinstance(maybe_root, yang.schema.DRoot):
+                root = maybe_root
+
+        for i in range(len(list_elems)):
+            new_prefix = gnmi.proto.Path(self.prefix.elems.copy(), self.prefix.origin, self.prefix.target)
+            new_prefix.elems.append(list_elems[i])
+
+            key = {}
+
+            for keyname, keyval in new_prefix.elems[-1].keys:
+                schema_key = schema_keys.get(keyname)
+                if root is not None and schema_key is not None:
+                    tv = try_parse_leaf_value(keyval, schema_key, schema_key.type_, new_path, root)
+                    if tv is not None:
+                        key[keyname] = tv.val
+
+            values.append((None, key, gnmi.proto.Notification(self.timestamp, new_prefix, list_elem_updates[i], list_elem_deletes[i], self.atomic)))
+
+        return values
+
+    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
+        new_path = path + [PathElement(schema)]
+
+        updates, deletes = select_notif_paths(self, name)
+
+        if len(updates) == 1 and len(deletes) == 0:
+            tv = try_parse_gnmi_value(updates[0].val, schema, schema.type_, new_path, root)
+            if tv is not None:
+                return (op=None, t=tv.t, val=tv.val)
+
+        return None
+
+
+    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
+        new_path = path + [PathElement(schema)]
+        values: list[(op: ?str, t: str, val: ?value)] = []
+
+        updates, deletes = select_notif_paths(self, name)
+
+        leaflist_path: ?gnmi.proto.Path = None
+        for update in updates:
+            if leaflist_path is not None:
+                if update.path != leaflist_path:
+                    # if the selected leaves don't have the same path,
+                    #  this isn't a leaflist
+                    values = []
+                    break
+            else:
+                leaflist_path = update.path
+
+            value = update.val
+            
+            if isinstance(value, gnmi.proto.LeafListValue):
+                for item in value.value:
+                    tv = try_parse_gnmi_value(item, schema, schema.type_, new_path, root)
+                    if tv is not None:
+                        values.append((op=None, t=tv.t, val=tv.val))
+
+        return values
+
+def select_notif_matches(notification: gnmi.proto.Notification, name: str) -> (list[(elem: gnmi.proto.PathElem, update: gnmi.proto.Update)], list[(elem: gnmi.proto.PathElem, delete: gnmi.proto.Path)]):
+
+    updates = []
+    deletes = []
+
+    for update in notification.update:
+        if update.path.elems[0].name == name:
+            if len(update.path.elems) > 1:
+                remaining_elems = update.path.elems[1:]
+            else:
+                remaining_elems = []
+            updates.append((elem=update.path.elems[0], update=gnmi.proto.Update(gnmi.proto.Path(remaining_elems, update.path.origin, update.path.target), update.val, update.duplicates)))
+
+    for delete in notification.delete:
+        if delete.elems[0].name == name:
+            if len(delete.elems) > 1:
+                remaining_elems = delete.elems[1:]
+            else:
+                remaining_elems = []
+            deletes.append((elem=delete.elems[0], delete=gnmi.proto.Path(remaining_elems, delete.origin, delete.target)))
+
+    return (updates, deletes)
+
+def select_notif_paths(notification: gnmi.proto.Notification, name: str) -> (list[gnmi.proto.Update], list[gnmi.proto.Path]):
+    updates, deletes = select_notif_matches(notification, name)
+    return (
+        [match.update for match in updates],
+        [match.delete for match in deletes]
+    )
+
+def try_parse_gnmi_value(gnmi_value: gnmi.proto.TypedValue, schema_node: yang.schema.DNodeLeaf, schema_type: yang.schema.DType, path: list[PathElement], root: yang.schema.DRoot) -> ?(t: str, val: value):
+    """Parse a textual value according to the provided schema type.
+
+    Returns:
+        (t, val): A typed tuple with the concrete type name and native value
+                  (e.g. ("uint8", 42)). For unions, returns the successful
+                  member type and parsed value.
+
+    Errors:
+        Raises YangValidationError with a message including the formatted
+        schema path (from the path parameter) and a textual description of the
+        expected type (including range constraints if present).
+    """
+    type_name = schema_type.builtin_type
+
+    if isinstance(schema_type, yang.schema.DTypeUnion):
+        for alt_type in schema_type.types:
+            try:
+                return try_parse_gnmi_value(gnmi_value, schema_node, alt_type, path, root)
+            except YangValidationError:
+                continue
+        if gnmi_value is not None:
+            raise YangValidationError(path, schema_type, gnmi_value)
+        return None
+    elif isinstance(schema_type, yang.schema.DTypeEmpty):
+        # Empty leaf JSON encoding: [null]
+        if isinstance(gnmi_value, gnmi.proto.NotSetValue):
+            return (t=type_name, val=yang.gdata.Present())
+        raise YangValidationError(path, schema_type, gnmi_value)
+
+    val: ?value = None
+    if isinstance(schema_type, yang.schema.DTypeString):
+        if isinstance(gnmi_value, gnmi.proto.StringValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeInteger):
+        if isinstance(gnmi_value, gnmi.proto.IntValue):
+            val = gnmi_value.value
+        elif isinstance(gnmi_value, gnmi.proto.UIntValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeEnum):
+        if isinstance(gnmi_value, gnmi.proto.StringValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeDecimal64):
+        if isinstance(gnmi_value, gnmi.proto.DecimalValue):
+            significand = bigint(gnmi_value.value.digits)
+            exponent = bigint(gnmi_value.value.precision)
+            val = Decimal(significand, exponent)
+        elif isinstance(gnmi_value, gnmi.proto.DoubleValue):
+            val = Decimal.try_parse(str(gnmi_value.value))
+        elif isinstance(gnmi_value, gnmi.proto.FloatValue):
+            val = Decimal.try_parse(str(gnmi_value.value))
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeBoolean):
+        if isinstance(gnmi_value, gnmi.proto.BoolValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeBinary):
+        if isinstance(gnmi_value, gnmi.proto.BytesValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeIdentityref):
+        if isinstance(gnmi_value, gnmi.proto.StringValue):
+            partial = Identityref.from_json(gnmi_value.value)
+            res = yang.schema.complete_identityref(partial, root.identities, schema_node.module)
+            val = res.0
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeLeafref):
+        target_type = schema_type.target_type
+        if target_type is not None:
+            return try_parse_gnmi_value(gnmi_value, schema_node, target_type, path, root)
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeInstanceIdentifier):
+        if isinstance(gnmi_value, gnmi.proto.StringValue):
+            val = gnmi_value.value
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+    elif isinstance(schema_type, yang.schema.DTypeBits):
+        if isinstance(gnmi_value, gnmi.proto.StringValue):
+            bits_val = set(None)
+            for bit in gnmi_value.value.split(" "):
+                if bit in schema_type.name_to_pos:
+                    bits_val.add(bit)
+                else:
+                    raise YangValidationError(path, schema_type, gnmi_value)
+            val = bits_val
+        else:
+            raise YangValidationError(path, schema_type, gnmi_value)
+
+    if val is not None and schema_type.validate_value(val):
+        return (t=type_name, val=val)
+
+    raise YangValidationError(path, schema_type, gnmi_value)
+
+    return None
+
+def try_parse_leaf_value(leaf_value: str, schema_node: yang.schema.DNodeLeaf, schema_type: yang.schema.DType, path: list[PathElement], root: yang.schema.DRoot) -> ?(t: str, val: value):
+    """Parse a textual value according to the provided schema type.
+
+    Returns:
+        (t, val): A typed tuple with the concrete type name and native value
+                  (e.g. ("uint8", 42)). For unions, returns the successful
+                  member type and parsed value.
+
+    Errors:
+        Raises YangValidationError with a message including the formatted
+        schema path (from the path parameter) and a textual description of the
+        expected type (including range constraints if present).
+    """
+    type_name = schema_type.builtin_type
+
+    if isinstance(schema_type, yang.schema.DTypeUnion):
+        for alt_type in schema_type.types:
+            try:
+                return try_parse_leaf_value(leaf_value, schema_node, alt_type, path, root)
+            except YangValidationError:
+                continue
+        if leaf_value is not None:
+            raise YangValidationError(path, schema_type, leaf_value)
+        return None
+    elif isinstance(schema_type, yang.schema.DTypeEmpty):
+        # Empty leaf JSON encoding: [null]
+        if leaf_value == "":
+            return (t=type_name, val=yang.gdata.Present())
+        raise YangValidationError(path, schema_type, leaf_value)
+
+    val: ?value = None
+    if isinstance(schema_type, yang.schema.DTypeString):
+        val = leaf_value
+    elif isinstance(schema_type, yang.schema.DTypeInteger):
+        val = int(leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeEnum):
+        val = leaf_value
+    elif isinstance(schema_type, yang.schema.DTypeDecimal64):
+        val = Decimal.try_parse(leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeBoolean):
+        if leaf_value == "true":
+            val = True
+        if leaf_value == "false":
+            val = False
+        else:
+            raise YangValidationError(path, schema_type, leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeBinary):
+        try:
+            val = base64.decode(leaf_value.encode())
+        except ValueError:
+            raise YangValidationError(path, schema_type, leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeIdentityref):
+        partial = Identityref.from_json(leaf_value)
+        res = yang.schema.complete_identityref(partial, root.identities, schema_node.module)
+        val = res.0
+    elif isinstance(schema_type, yang.schema.DTypeLeafref):
+        target_type = schema_type.target_type
+        if target_type is not None:
+            return try_parse_leaf_value(leaf_value, schema_node, target_type, path, root)
+        else:
+            raise YangValidationError(path, schema_type, leaf_value)
+    elif isinstance(schema_type, yang.schema.DTypeInstanceIdentifier):
+        val = leaf_value
+    elif isinstance(schema_type, yang.schema.DTypeBits):
+        bits_val = set(None)
+        for bit in leaf_value.split(" "):
+            if bit in schema_type.name_to_pos:
+                bits_val.add(bit)
+            else:
+                raise YangValidationError(path, schema_type, leaf_value)
+        val = bits_val
+
+    if val is not None and schema_type.validate_value(val):
+        return (t=type_name, val=val)
+
+    raise YangValidationError(path, schema_type, leaf_value)
+
+    return None
+
+
+def from_gnmi_notif(root: yang.schema.DRoot, data: gnmi.proto.Notification, loose: bool=False, root_path: list[str]=[]) -> yang.gdata.Container:
+    def type_narrower(v):
+        if isinstance(v, gnmi.proto.Notification):
+            return v
+        raise ValueError("Value is not a gnmi.proto.Notification: {type(v)}")
+
+    return from_data(root, data, type_narrower, loose, root_path)
