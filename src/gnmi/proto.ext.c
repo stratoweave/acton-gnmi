@@ -135,8 +135,8 @@ B_bytes gnmiQ_protoQ_pack_GetRequest(gnmiQ_protoQ_GetRequest acton_get_request) 
         use_models[i]->version = (char*)fromB_str(acton_use_models[i]->version);
     }
 
-    get_request.type = fromB_int(acton_get_request->type);
-    get_request.encoding = fromB_int(acton_get_request->encoding);
+    get_request.type = acton_get_request->type;
+    get_request.encoding = acton_get_request->encoding;
 
     size_t buffer_size = gnmi__get_request__get_packed_size(&get_request);
 
@@ -171,10 +171,10 @@ B_bytes gnmiQ_protoQ_pack_SubscribeRequest(gnmiQ_protoQ_SubscribeRequest acton_s
         //various scalar fields
         subscribe_request.subscribe->qos = acton_malloc(sizeof(Gnmi__QOSMarking));
         gnmi__qosmarking__init(subscribe_request.subscribe->qos);
-        subscribe_request.subscribe->qos->marking = fromB_u32(acton_subscription_list->qos);
-        subscribe_request.subscribe->mode = fromB_int(acton_subscription_list->mode);
+        subscribe_request.subscribe->qos->marking = acton_subscription_list->qos;
+        subscribe_request.subscribe->mode = acton_subscription_list->mode;
         subscribe_request.subscribe->allow_aggregation = fromB_bool(acton_subscription_list->allow_aggregation);
-        subscribe_request.subscribe->encoding = fromB_int(acton_subscription_list->encoding);
+        subscribe_request.subscribe->encoding = acton_subscription_list->encoding;
         subscribe_request.subscribe->updates_only = fromB_bool(acton_subscription_list->updates_only);
 
         // subscriptions
@@ -191,10 +191,10 @@ B_bytes gnmiQ_protoQ_pack_SubscribeRequest(gnmiQ_protoQ_SubscribeRequest acton_s
             gnmi__path__init(subscriptions[i]->path);
             path_acton_to_proto(subscriptions[i]->path, acton_subscriptions[i]->path);
 
-            subscriptions[i]->mode = fromB_int(acton_subscriptions[i]->mode);
-            subscriptions[i]->sample_interval = fromB_u64(acton_subscriptions[i]->sample_interval);
+            subscriptions[i]->mode = acton_subscriptions[i]->mode;
+            subscriptions[i]->sample_interval = acton_subscriptions[i]->sample_interval;
             subscriptions[i]->suppress_redundant = fromB_bool(acton_subscriptions[i]->suppress_redundant);
-            subscriptions[i]->heartbeat_interval = fromB_u64(acton_subscriptions[i]->heartbeat_interval);
+            subscriptions[i]->heartbeat_interval = acton_subscriptions[i]->heartbeat_interval;
         }
 
         // models
@@ -234,12 +234,12 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
     B_bytes acton_bytes_val;
     B_bytes b_bytes_val;
     B_str b_str_val;
-    B_int b_i64_val;
-    B_u64 b_u64_val;
+    int64_t i64_val;
+    uint64_t u64_val;
     B_bool b_bool_val;
     B_str string_val;
-    B_float b_float_val;
-    B_u32 b_u32_val;
+    double float_val;
+    uint32_t u32_val;
     gnmiQ_protoQ_Decimal64 decimal_val;
     size_t n_element;
     B_list list_val;
@@ -259,13 +259,12 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_StringValueG_new(b_str_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_INT_VAL:
-            b_i64_val = toB_int(val->int_val);
-            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_IntValueG_new(b_i64_val);
+            i64_val = val->int_val;
+            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_IntValueG_new(i64_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_UINT_VAL:
-            b_u64_val = toB_u64(val->uint_val);
-            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_UIntValueG_new(b_u64_val);
-            break;
+            u64_val = val->uint_val;
+            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_UIntValueG_new(u64_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_BOOL_VAL:
             b_bool_val = toB_bool(val->bool_val);
@@ -277,17 +276,17 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_BytesValueG_new(b_bytes_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_FLOAT_VAL:
-            b_float_val = toB_float(val->double_val);
-            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_FloatValueG_new(b_float_val);
+            float_val = val->double_val;
+            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_FloatValueG_new(float_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_DOUBLE_VAL:
-            b_float_val = toB_float(val->double_val);
-            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_DoubleValueG_new(b_float_val);
+            float_val = val->double_val;
+            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_DoubleValueG_new(float_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_DECIMAL_VAL:
-            b_i64_val = toB_int(val->decimal_val->digits);
-            b_u32_val = toB_u32(val->decimal_val->precision);
-            decimal_val = gnmiQ_protoQ_Decimal64G_new(b_i64_val, b_u32_val);
+            i64_val = val->decimal_val->digits;
+            u32_val = val->decimal_val->precision;
+            decimal_val = gnmiQ_protoQ_Decimal64G_new(i64_val, u32_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_DecimalValueG_new(decimal_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_LEAFLIST_VAL:
@@ -332,6 +331,8 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             proto_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_ProtoBytesValueG_new(proto_val);
             break;
+        default:
+            break;
     }
 
     return typed_val;
@@ -346,7 +347,7 @@ gnmiQ_protoQ_GetResponse gnmiQ_protoQ_unpack_GetResponse(B_bytes data) {
     B_Sequence notification_wit = (B_Sequence)B_SequenceD_listG_witness;
 
     for (size_t i = 0; i < n_notification; ++i) {
-        B_int timestamp = toB_int(get_response->notification[i]->timestamp);
+        int64_t timestamp = get_response->notification[i]->timestamp;
         gnmiQ_protoQ_Path prefix = path_proto_to_acton(get_response->notification[i]->prefix);
         B_bool atomic = toB_bool(get_response->notification[i]->atomic);
 
@@ -359,7 +360,7 @@ gnmiQ_protoQ_GetResponse gnmiQ_protoQ_unpack_GetResponse(B_bytes data) {
         for (size_t j = 0; j < n_update; ++j) {
             gnmiQ_protoQ_Path update_path = path_proto_to_acton(proto_update[j]->path);
             gnmiQ_protoQ_TypedValue typed_val = typed_val_proto_to_acton(proto_update[j]->val);
-            gnmiQ_protoQ_Update acton_update = gnmiQ_protoQ_UpdateG_new(update_path, typed_val, toB_u32(proto_update[j]->duplicates));
+            gnmiQ_protoQ_Update acton_update = gnmiQ_protoQ_UpdateG_new(update_path, typed_val, proto_update[j]->duplicates);
             update_wit->$class->append(update_wit, updates, acton_update);
         }
 
@@ -388,10 +389,10 @@ gnmiQ_protoQ_SubscribeResponse gnmiQ_protoQ_unpack_SubscribeResponse(B_bytes dat
     switch (subscribe_response->response_case) {
         case GNMI__SUBSCRIBE_RESPONSE__RESPONSE__NOT_SET:
             break;
-        case GNMI__SUBSCRIBE_RESPONSE__RESPONSE_UPDATE:
+        case GNMI__SUBSCRIBE_RESPONSE__RESPONSE_UPDATE: {
             Gnmi__Notification *proto_notif = subscribe_response->update;
 
-            B_int timestamp = toB_int(proto_notif->timestamp);
+            int64_t timestamp = proto_notif->timestamp;
             gnmiQ_protoQ_Path prefix = path_proto_to_acton(proto_notif->prefix);
             B_bool atomic = toB_bool(proto_notif->atomic);
 
@@ -402,7 +403,7 @@ gnmiQ_protoQ_SubscribeResponse gnmiQ_protoQ_unpack_SubscribeResponse(B_bytes dat
                 Gnmi__Update *proto_update = proto_notif->update[i];
                 gnmiQ_protoQ_Path update_path = path_proto_to_acton(proto_update->path);
                 gnmiQ_protoQ_TypedValue typed_val = typed_val_proto_to_acton(proto_update->val);
-                gnmiQ_protoQ_Update acton_update = gnmiQ_protoQ_UpdateG_new(update_path, typed_val, toB_u32(proto_update->duplicates));
+                gnmiQ_protoQ_Update acton_update = gnmiQ_protoQ_UpdateG_new(update_path, typed_val, proto_update->duplicates);
                 update_wit->$class->append(update_wit, updates, acton_update);
 	    }
 
@@ -416,14 +417,16 @@ gnmiQ_protoQ_SubscribeResponse gnmiQ_protoQ_unpack_SubscribeResponse(B_bytes dat
 
             acton_notif = gnmiQ_protoQ_NotificationG_new(timestamp, prefix, updates, deletes, atomic);
             break;
+        }
         case GNMI__SUBSCRIBE_RESPONSE__RESPONSE_SYNC_RESPONSE:
             break;
         case GNMI__SUBSCRIBE_RESPONSE__RESPONSE_ERROR:
             // deprecated case
             break;
+        default:
+            break;
     }
-    gnmiQ_protoQ_SubscribeResponse response = gnmiQ_protoQ_SubscribeResponseG_new(to$int(subscribe_response->response_case), acton_notif, sync_response);
+    gnmiQ_protoQ_SubscribeResponse response = gnmiQ_protoQ_SubscribeResponseG_new(subscribe_response->response_case, acton_notif, sync_response);
 
     return response;
 }
-
