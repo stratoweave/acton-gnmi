@@ -1,12 +1,12 @@
 import testing
 
-from gnmi.proto import Notification, Update, Path, PathElem
-from gnmi.proto import StringValue, DoubleValue, LeafListValue
-from gnmi.yang.gnmi import from_gnmi_notif, select_notif_matches, select_notif_paths
+from proto import Notification, Update, Path, PathElem
+from proto import StringValue, DoubleValue, LeafListValue
+from gnyang.gnmi import from_gnmi_notif, select_notif_matches, select_notif_paths
 
 import yang
-import yang.gdata
-import yang.schema
+import yang.gdata as ygdata
+import yang.schema as yschema
 
 from yang.data import YangValidationError
 from yang.identityref import Identityref, PartialIdentityref
@@ -93,10 +93,10 @@ def _test_y1_gnmi_take_container():
 
     s = yang.compile([y1])
 
-    if isinstance(s, yang.schema.DRoot):
+    if isinstance(s, yschema.DRoot):
         for child in s.children:
             if child.name == 'c1':
-                if isinstance(child, yang.schema.DContainer):
+                if isinstance(child, yschema.DContainer):
                     notif_in.take_container(child, 'c1', False, [])
                 else:
                     raise Exception()
@@ -130,13 +130,13 @@ def _test_y1_gnmi_take_list():
 
     s = yang.compile([y1])
 
-    if isinstance(s, yang.schema.DRoot):
+    if isinstance(s, yschema.DRoot):
         c1_opval: ?(op: ?str, val: ?value) = None
-        c1_schema: ?yang.schema.DContainer = None
+        c1_schema: ?yschema.DContainer = None
 
         for child in s.children:
             if child.name == 'l2':
-                if isinstance(child, yang.schema.DList):
+                if isinstance(child, yschema.DList):
                     list_val = notif_in.take_list(child, 'l2', False, [])
                     testing.assertEqual(len(list_val), 1)
                     list_notif = list_val[0].val
@@ -175,10 +175,10 @@ def _test_y1_gnmi_take_leaflist():
 
     s = yang.compile([y1])
 
-    if isinstance(s, yang.schema.DRoot):
+    if isinstance(s, yschema.DRoot):
         for child in s.children:
             if child.name == 'll1':
-                if isinstance(child, yang.schema.DLeafList):
+                if isinstance(child, yschema.DLeafList):
                     notif_in.take_leaflist(s, child, 'll1', False, [])
                 else:
                     raise Exception()
@@ -203,10 +203,10 @@ def _test_y1_gnmi_take_leaf():
 
     s = yang.compile([y1])
 
-    if isinstance(s, yang.schema.DRoot):
+    if isinstance(s, yschema.DRoot):
         for child in s.children:
             if child.name == 'l1':
-                if isinstance(child, yang.schema.DLeaf):
+                if isinstance(child, yschema.DLeaf):
                     notif_in.take_leaf(s, child, 'l1', False, [])
                 else:
                     raise Exception('l1 is not DLeaf')

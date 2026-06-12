@@ -1,4 +1,4 @@
-import json
+import std.json as json
 #Encodings
 JSON = 0
 BYTES = 1

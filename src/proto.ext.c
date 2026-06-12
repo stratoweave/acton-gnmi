@@ -1,4 +1,4 @@
-#include "gnmi/gnmi.pb-c.c"
+#include "src/gnmi/gnmi/gnmi.pb-c.c"
 
 void *gnmi_acton_malloc_cb(void *mem_user_data, size_t size) {
     return acton_malloc(size);
@@ -312,14 +312,14 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             bytes_val = val->json_val;
             acton_bytes_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
             string_val = to$str((char*)acton_bytes_val->str);
-            json_val = jsonQ_decode(string_val);
+            json_val = stdQ_jsonQ_decode(string_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_JsonValueG_new(json_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_JSON_IETF_VAL:
             bytes_val = val->json_ietf_val;
             acton_bytes_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
             string_val = to$str((char*)acton_bytes_val->str);
-            json_val = jsonQ_decode(string_val);
+            json_val = stdQ_jsonQ_decode(string_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_JsonIetfValueG_new(json_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_ASCII_VAL:

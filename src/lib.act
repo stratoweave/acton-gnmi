@@ -2,7 +2,7 @@ import logging
 import net
 import base64
 import grpc.grpc as grpc
-import gnmi.proto as proto
+import proto
 
 
 actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, insecure = False, log_handler: ?logging.Handler, tls_verify: bool = True, basic_creds: ?(str, str) = None):

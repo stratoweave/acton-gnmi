@@ -1,14 +1,14 @@
-name = "acton_gnmi"
-fingerprint = 0x659dca899e170c17
+name = "gnmi"
+fingerprint = 0x21c13a9a49111a8a
 dependencies = {
     "grpc": (
         repo_url="https://github.com/actonlang/acton-grpc.git",
-        url="https://github.com/actonlang/acton-grpc/archive/0268c4f6c4d0087053e8022725b5dd6d96085234.zip",
-        hash="N-V-__8AADgfAAAx0uhwZalaEdos4-S1bwPGNgl02DI9RCCk"
+        url="https://github.com/actonlang/acton-grpc/archive/442a34011398cbfc8c51a53e564d77156f4b38d1.zip",
+        hash="N-V-__8AADIfAADgL1OTyq95TQge3za_Ml1exduewvEaEH31"
     ),
     "yang": (
         repo_url="https://github.com/orchestron-orchestrator/acton-yang.git",
-        url="https://github.com/orchestron-orchestrator/acton-yang/archive/e655d8bc475220ac71c037b2699ee28390857305.zip",
-        hash="N-V-__8AABu8JQDFjzgsCeLMqvqBTHCqtbdA9tNnfzi-ORiS"
+        url="https://github.com/orchestron-orchestrator/acton-yang/archive/81fb1b89e0ea212b0ff15c3009a4c2d7a1750dc7.zip",
+        hash="N-V-__8AAJmuJQBbpGy-JVleqKcpIp7M3Gpo4DolxhQuzuhI"
     )
 }
