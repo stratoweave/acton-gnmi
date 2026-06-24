@@ -103,6 +103,16 @@ extension proto.Notification(YangData):
             if tv is not None:
                 return (op=None, t=tv.t, val=tv.val)
 
+        # A list key leaf usually has no update of its own: its value lives in the
+        # path predicate (e.g. interface[name=mgmt0]). Recover it from the prefix's
+        # last element's keys so the non-optional key still resolves.
+        if len(self.prefix.elems) > 0:
+            for k, v in self.prefix.elems[-1].keys:
+                if k == name:
+                    tv = try_parse_leaf_value(v, schema, schema.type_, new_path, root)
+                    if tv is not None:
+                        return (op=None, t=tv.t, val=tv.val)
+
         return None
 
 
