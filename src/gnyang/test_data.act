@@ -248,6 +248,59 @@ def _test_y1_gnmi_key_from_predicate():
     testing.assertEqual('Key 1' in src, True)
     testing.assertEqual('Value for v1' in src, True)
 
+def _test_y1_gnmi_multi_key_from_predicate():
+    """Both keys of a multi-key list, carried only in the predicate, must resolve."""
+    ym = r"""module ym {
+  namespace "urn:example:ym";
+  prefix ym;
+
+  list l {
+    key "a b";
+    leaf a { type string; }
+    leaf b { type string; }
+    leaf v { type string; }
+  }
+}"""
+
+    notif_in = Notification(0, Path([], '', ''),
+                           [Update(Path([PathElem('l', [('a', 'A1'), ('b', 'B1')]), PathElem('v', [])], '', ''), StringValue('val'), 0)
+                            ],
+                           [], False)
+
+    s = yang.compile([ym])
+    gd = from_gnmi_notif(s, notif_in)
+    src = gd.prsrc()
+    testing.assertEqual('A1' in src, True)
+    testing.assertEqual('B1' in src, True)
+
+def _test_y1_gnmi_nested_no_keyleak():
+    """A leaf named like the parent list's key, but nested in a container with its
+    own update, must keep its own value and not inherit the list key (the fix only
+    reads elems[-1], and take_container pushes an empty-keys PathElem)."""
+    yn = r"""module yn {
+  namespace "urn:example:yn";
+  prefix yn;
+
+  list l {
+    key "k1";
+    leaf k1 { type string; }
+    container inner {
+      leaf k1 { type string; }
+    }
+  }
+}"""
+
+    notif_in = Notification(0, Path([], '', ''),
+                           [Update(Path([PathElem('l', [('k1', 'OUTER')]), PathElem('inner', []), PathElem('k1', [])], '', ''), StringValue('INNER'), 0)
+                            ],
+                           [], False)
+
+    s = yang.compile([yn])
+    gd = from_gnmi_notif(s, notif_in)
+    src = gd.prsrc()
+    testing.assertEqual('OUTER' in src, True)
+    testing.assertEqual('INNER' in src, True)
+
 def _test_y1_gnmi():
     y1 = r"""module y1 {
   namespace "urn:example:y1";
