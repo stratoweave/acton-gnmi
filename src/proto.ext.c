@@ -46,6 +46,10 @@ int path_acton_to_proto(Gnmi__Path *proto_path, gnmiQ_protoQ_Path acton_path) {
 }
 
 gnmiQ_protoQ_Path path_proto_to_acton(Gnmi__Path *proto_path) {
+    // prefix (and other path fields) are optional in gNMI; absent => NULL here.
+    if (proto_path == NULL) {
+        return gnmiQ_protoQ_PathG_new(B_listD_new(0), to$str(""), to$str(""));
+    }
     size_t n_elem = proto_path->n_elem;
     B_list elems = B_listD_new(n_elem);
     B_Sequence elem_wit = (B_Sequence)B_SequenceD_listG_witness;
