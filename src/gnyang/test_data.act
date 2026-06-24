@@ -213,6 +213,41 @@ def _test_y1_gnmi_take_leaf():
     else:
         raise Exception()
 
+def _test_y1_gnmi_key_from_predicate():
+    """A gNMI server may carry a list key only in the path predicate (l2[k1=...]),
+    not as a separate update for the key leaf. from_gnmi_notif must still resolve
+    the non-optional key leaf from the predicate rather than failing with
+    "Cannot find child node". This mirrors what Nokia SR Linux sends."""
+    y1 = r"""module y1 {
+  namespace "urn:example:y1";
+  prefix y1;
+
+  container c1 {
+    list l2 {
+      key "k1";
+      leaf k1 {
+        type string;
+      }
+      leaf v1 {
+        type string;
+      }
+    }
+  }
+}"""
+
+    # Note: there is NO update for .../k1 — the key value lives only in the
+    # l2[k1=Key 1] predicate, exactly as SR Linux streams it.
+    notif_in = Notification(0, Path([], '', ''),
+                           [Update(Path([PathElem('c1', []), PathElem('l2', [('k1', 'Key 1')]), PathElem('v1', [])], '', ''), StringValue('Value for v1'), 0)
+                            ],
+                           [], False)
+
+    s = yang.compile([y1])
+    gd = from_gnmi_notif(s, notif_in)
+    src = gd.prsrc()
+    testing.assertEqual('Key 1' in src, True)
+    testing.assertEqual('Value for v1' in src, True)
+
 def _test_y1_gnmi():
     y1 = r"""module y1 {
   namespace "urn:example:y1";
