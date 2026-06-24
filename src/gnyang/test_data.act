@@ -1,7 +1,7 @@
 import testing
 
 from proto import Notification, Update, Path, PathElem
-from proto import StringValue, DoubleValue, LeafListValue
+from proto import StringValue, DoubleValue, LeafListValue, BoolValue
 from gnyang.gnmi import from_gnmi_notif, select_notif_matches, select_notif_paths
 
 import yang
@@ -265,3 +265,32 @@ def _test_y1_gnmi():
     s = yang.compile([y1])
     gd = from_gnmi_notif(s, notif_in)
     return gd.prsrc()
+
+def _test_y1_gnmi_boolean_key():
+    """A boolean list key carried in the predicate (enabled=true) must parse as a
+    boolean string rather than raising in try_parse_leaf_value."""
+    yb = r"""module yb {
+  namespace "urn:example:yb";
+  prefix yb;
+
+  list lb {
+    key "enabled";
+    leaf enabled {
+      type boolean;
+    }
+    leaf v1 {
+      type string;
+    }
+  }
+}"""
+
+    notif_in = Notification(0, Path([], '', ''),
+                           [Update(Path([PathElem('lb', [('enabled', 'true')]), PathElem('enabled', [])], '', ''), BoolValue(True), 0),
+                            Update(Path([PathElem('lb', [('enabled', 'true')]), PathElem('v1', [])], '', ''), StringValue('x'), 0)
+                            ],
+                           [], False)
+
+    s = yang.compile([yb])
+    gd = from_gnmi_notif(s, notif_in)
+    src = gd.prsrc()
+    testing.assertEqual('x' in src, True)
