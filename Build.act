@@ -3,8 +3,8 @@ fingerprint = 0x21c13a9a49111a8a
 dependencies = {
     "grpc": (
         repo_url="https://github.com/actonlang/acton-grpc.git",
-        url="https://github.com/actonlang/acton-grpc/archive/480661917e1281a1e9c1f59dc5d42a7a3a3e716b.zip",
-        hash="N-V-__8AADggAADkMv6-s6EAlx4MPaj3naV_W-a4G7hZYqR_"
+        url="https://github.com/actonlang/acton-grpc/archive/e0c58b543ce81281c037320d50570564b87e965f.zip",
+        hash="N-V-__8AADggAAArNpA1GU5zIcKHV8AIEvsA1i2Pk7hwpLRb"
     ),
     "yang": (
         repo_url="https://github.com/orchestron-orchestrator/acton-yang.git",
