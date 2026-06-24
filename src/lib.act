@@ -74,7 +74,7 @@ actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> 
         use_models: list[proto.ModelData] = []
 
         for path in paths:
-            subscriptions.append(proto.Subscription(path, mode, sample_interval, False, sample_interval))
+            subscriptions.append(proto.Subscription(path, stream_mode, sample_interval, False, sample_interval))
 
         request = proto.SubscribeRequest(proto.SubscriptionList(prefix, subscriptions, qos, mode, allow_aggregation, use_models, encoding, updates_only))
         payload: bytes = request.pack()
