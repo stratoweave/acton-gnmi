@@ -8,7 +8,7 @@ dependencies = {
     ),
     "yang": (
         repo_url="https://github.com/orchestron-orchestrator/acton-yang.git",
-        url="https://github.com/orchestron-orchestrator/acton-yang/archive/20c744c934dd7d76d501aec0b4d1cf2582a87476.zip",
-        hash="N-V-__8AAGDKJwBBv9yrhaAupRZabnJIMPIuB8MoKTPlARfR"
+        url="https://github.com/orchestron-orchestrator/acton-yang/archive/54a43ea7cc63422a49f812866bb827d41def07a9.zip",
+        hash="N-V-__8AAOAKKQDIZlUaGUPi-egcMvXRfqxL1osct9fwgt7r"
     )
 }
