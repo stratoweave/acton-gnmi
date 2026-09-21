@@ -3,12 +3,12 @@ fingerprint = 0x21c13a9a49111a8a
 dependencies = {
     "grpc": (
         repo_url="https://github.com/actonlang/acton-grpc.git",
-        url="https://github.com/actonlang/acton-grpc/archive/e0c58b543ce81281c037320d50570564b87e965f.zip",
-        hash="N-V-__8AADggAAArNpA1GU5zIcKHV8AIEvsA1i2Pk7hwpLRb"
+        url="https://github.com/actonlang/acton-grpc/archive/e25d344dd395dc36b21d5093a62b2172c82eaba6.zip",
+        hash="N-V-__8AADggAAC6rb3kk9Un-H1f86VyytKHCWbA3BbU1A1f"
     ),
     "yang": (
         repo_url="https://github.com/orchestron-orchestrator/acton-yang.git",
-        url="https://github.com/orchestron-orchestrator/acton-yang/archive/54a43ea7cc63422a49f812866bb827d41def07a9.zip",
-        hash="N-V-__8AAOAKKQDIZlUaGUPi-egcMvXRfqxL1osct9fwgt7r"
+        url="https://github.com/orchestron-orchestrator/acton-yang/archive/7e0fadf0fab3815fdd94284971abd86d75401fca.zip",
+        hash="N-V-__8AAA5HKQBAj0-JXnx4dew_j8twnjetQAjMpigPxgnl"
     )
 }
