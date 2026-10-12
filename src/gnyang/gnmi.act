@@ -246,8 +246,9 @@ def try_parse_gnmi_value(gnmi_value: proto.TypedValue, schema_node: yschema.DNod
     elif isinstance(schema_type, yschema.DTypeIdentityref):
         if isinstance(gnmi_value, proto.StringValue):
             partial = Identityref.from_json(gnmi_value.value)
-            res = yschema.complete_identityref(partial, root.identities, schema_node.module)
-            val = res.0
+            if partial is not None:
+                res = yschema.complete_identityref(partial, root.identities, schema_node.module)
+                val = res.0
         else:
             raise YangValidationError(path, schema_type, gnmi_value)
     elif isinstance(schema_type, yschema.DTypeLeafref):
@@ -330,8 +331,9 @@ def try_parse_leaf_value(leaf_value: str, schema_node: yschema.DNodeLeaf, schema
             raise YangValidationError(path, schema_type, leaf_value)
     elif isinstance(schema_type, yschema.DTypeIdentityref):
         partial = Identityref.from_json(leaf_value)
-        res = yschema.complete_identityref(partial, root.identities, schema_node.module)
-        val = res.0
+        if partial is not None:
+            res = yschema.complete_identityref(partial, root.identities, schema_node.module)
+            val = res.0
     elif isinstance(schema_type, yschema.DTypeLeafref):
         target_type = schema_type.target_type
         if target_type is not None:

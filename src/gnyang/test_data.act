@@ -3,6 +3,7 @@ import testing
 from proto import Notification, Update, Path, PathElem
 from proto import StringValue, DoubleValue, DecimalValue, Decimal64, LeafListValue, BoolValue
 from gnyang.gnmi import from_gnmi_notif, select_notif_matches, select_notif_paths
+from gnyang.gnmi import try_parse_gnmi_value, try_parse_leaf_value
 
 import yang
 import yang.gdata as ygdata
@@ -396,3 +397,52 @@ def _test_y1_gnmi_boolean_key():
     gd = from_gnmi_notif(s, notif_in)
     src = gd.prsrc()
     testing.assertEqual('x' in src, True)
+
+
+def _test_gnmi_identityref_values():
+    yid = r"""module yid {
+  namespace "urn:example:yid";
+  prefix yid;
+  identity transport;
+  identity ssh { base transport; }
+  leaf protocol { type identityref { base transport; } }
+}"""
+    root = yang.compile([yid])
+    leaf = root.get("protocol")
+    if isinstance(leaf, yschema.DLeaf):
+        parsed = try_parse_gnmi_value(StringValue("ssh"), leaf, leaf.type, [], root)
+        if parsed is not None:
+            identity = parsed.val
+            if isinstance(identity, Identityref):
+                testing.assertEqual(identity.val, "ssh")
+            else:
+                testing.error("Expected an Identityref value")
+        else:
+            testing.error("Expected a parsed identityref")
+
+        parsed_leaf = try_parse_leaf_value("ssh", leaf, leaf.type, [], root)
+        if parsed_leaf is not None:
+            key_identity = parsed_leaf.val
+            if isinstance(key_identity, Identityref):
+                testing.assertEqual(key_identity.val, "ssh")
+            else:
+                testing.error("Expected an Identityref key")
+        else:
+            testing.error("Expected a parsed identityref key")
+
+        for text in ["yid:ssh:extra", "unknown"]:
+            rejected = False
+            try:
+                try_parse_gnmi_value(StringValue(text), leaf, leaf.type, [], root)
+            except YangValidationError:
+                rejected = True
+            testing.assertEqual(rejected, True)
+
+            rejected_leaf = False
+            try:
+                try_parse_leaf_value(text, leaf, leaf.type, [], root)
+            except YangValidationError:
+                rejected_leaf = True
+            testing.assertEqual(rejected_leaf, True)
+    else:
+        testing.error("Expected an identityref leaf")

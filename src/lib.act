@@ -5,7 +5,7 @@ import grpc.grpc as grpc
 import proto
 
 
-actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, insecure = False, log_handler: ?logging.Handler, tls_verify: bool = True, basic_creds: ?(str, str) = None):
+actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, insecure = False, log_handler: ?logging.Handler = None, tls_verify: bool = True, basic_creds: ?(str, str) = None):
 
     logh = logging.Handler("gnmi.Client")
     if log_handler is not None:
