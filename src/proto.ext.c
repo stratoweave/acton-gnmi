@@ -9,6 +9,9 @@ void gnmi_acton_free_cb(void *mem_user_data, void *ptr) {
 }
 struct ProtobufCAllocator gnmi_acton_alloc = { gnmi_acton_malloc_cb, gnmi_acton_free_cb, NULL };
 
+static struct B_ValueError gnmi_invalid_message_error =
+    STATIC_EXCEPTION(B_ValueError, "Invalid gNMI message");
+
 
 void gnmiQ_protoQ___ext_init__() {
    // NOP
@@ -78,6 +81,8 @@ gnmiQ_protoQ_Path path_proto_to_acton(Gnmi__Path *proto_path) {
 
 gnmiQ_protoQ_CapabilityResponse gnmiQ_protoQ_unpack_CapabilityResponse(B_bytes data) {
     Gnmi__CapabilityResponse *proto_capability_response = gnmi__capability_response__unpack(&gnmi_acton_alloc, data->nbytes, data->str);
+    if (proto_capability_response == NULL)
+        RAISE_EXC(&gnmi_invalid_message_error);
 
     size_t n_supported_models = proto_capability_response->n_supported_models;
     Gnmi__ModelData **proto_supported_models = proto_capability_response->supported_models;
@@ -233,6 +238,8 @@ B_bytes gnmiQ_protoQ_pack_SubscribeRequest(gnmiQ_protoQ_SubscribeRequest acton_s
 }
 
 gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
+    if (val == NULL)
+        return (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_NotSetValueG_new();
     gnmiQ_protoQ_TypedValue typed_val;
     ProtobufCBinaryData bytes_val;
     B_bytes acton_bytes_val;
@@ -280,7 +287,7 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_BytesValueG_new(b_bytes_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_FLOAT_VAL:
-            float_val = val->double_val;
+            float_val = val->float_val;
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_FloatValueG_new(float_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_DOUBLE_VAL:
@@ -314,15 +321,13 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             break;
         case GNMI__TYPED_VALUE__VALUE_JSON_VAL:
             bytes_val = val->json_val;
-            acton_bytes_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
-            string_val = to$str((char*)acton_bytes_val->str);
+            string_val = actStrFromCStringLengthCopy((char*)bytes_val.data, bytes_val.len);
             json_val = stdQ_jsonQ_decode(string_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_JsonValueG_new(json_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_JSON_IETF_VAL:
             bytes_val = val->json_ietf_val;
-            acton_bytes_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
-            string_val = to$str((char*)acton_bytes_val->str);
+            string_val = actStrFromCStringLengthCopy((char*)bytes_val.data, bytes_val.len);
             json_val = stdQ_jsonQ_decode(string_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_JsonIetfValueG_new(json_val);
             break;
@@ -336,6 +341,7 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_ProtoBytesValueG_new(proto_val);
             break;
         default:
+            typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_NotSetValueG_new();
             break;
     }
 
@@ -345,6 +351,8 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
 gnmiQ_protoQ_GetResponse gnmiQ_protoQ_unpack_GetResponse(B_bytes data) {
 
     Gnmi__GetResponse *get_response = gnmi__get_response__unpack(&gnmi_acton_alloc, data->nbytes, data->str);
+    if (get_response == NULL)
+        RAISE_EXC(&gnmi_invalid_message_error);
 
     size_t n_notification = get_response->n_notification;
     B_list notifications = B_listD_new(n_notification);
@@ -371,19 +379,22 @@ gnmiQ_protoQ_GetResponse gnmiQ_protoQ_unpack_GetResponse(B_bytes data) {
         size_t n_delete = get_response->notification[i]->n_delete_;
         B_list deletes = B_listD_new(n_delete);
         B_Sequence delete_wit = (B_Sequence)B_SequenceD_listG_witness;
-        for (size_t i = 0; i < n_delete; ++i) {
-            gnmiQ_protoQ_Path acton_delete = path_proto_to_acton(get_response->notification[i]->delete_[i]);
+        for (size_t j = 0; j < n_delete; ++j) {
+            gnmiQ_protoQ_Path acton_delete = path_proto_to_acton(get_response->notification[i]->delete_[j]);
             delete_wit->$class->append(delete_wit, deletes, acton_delete);
 	}
 
         gnmiQ_protoQ_Notification acton_notification = gnmiQ_protoQ_NotificationG_new(timestamp, prefix, updates, deletes, atomic);
         notification_wit->$class->append(notification_wit, notifications, acton_notification);
     }
+    return gnmiQ_protoQ_GetResponseG_new(notifications);
 }
 
 gnmiQ_protoQ_SubscribeResponse gnmiQ_protoQ_unpack_SubscribeResponse(B_bytes data) {
 
     Gnmi__SubscribeResponse *subscribe_response = gnmi__subscribe_response__unpack(&gnmi_acton_alloc, data->nbytes, data->str);
+    if (subscribe_response == NULL)
+        RAISE_EXC(&gnmi_invalid_message_error);
 
     gnmiQ_protoQ_Notification acton_notif = NULL;
     bool sync_response = false;
@@ -423,6 +434,7 @@ gnmiQ_protoQ_SubscribeResponse gnmiQ_protoQ_unpack_SubscribeResponse(B_bytes dat
             break;
         }
         case GNMI__SUBSCRIBE_RESPONSE__RESPONSE_SYNC_RESPONSE:
+            sync_response = subscribe_response->sync_response;
             break;
         case GNMI__SUBSCRIBE_RESPONSE__RESPONSE_ERROR:
             // deprecated case
