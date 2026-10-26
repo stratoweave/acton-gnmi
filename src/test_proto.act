@@ -1,0 +1,77 @@
+import testing
+import proto
+
+# A GetResponse with one notification (timestamp 1): an update of path x
+# whose value is the deprecated float_val 1.5, and deletes of paths a and b
+_get_response = b'\x0a \x08\x01"\x0e\x0a\x05\x1a\x03\x0a\x01x\x1a\x055\x00\x00\xc0?*\x05\x1a\x03\x0a\x01a*\x05\x1a\x03\x0a\x01b'
+
+# A GetResponse with an update of path x that has no value
+_get_response_no_val = b'\x0a\x09"\x07\x0a\x05\x1a\x03\x0a\x01x'
+
+# A GetResponse with an update of path x whose value is the JSON text
+# {"a": 1}
+_get_response_json = b'\x0a\x15"\x13\x0a\x05\x1a\x03\x0a\x01x\x1a\x0aR\x08{"a": 1}'
+
+# A SubscribeResponse with sync_response set
+_subscribe_response_sync = b'\x18\x01'
+
+# Field 1 claims a 16-byte message, but only 1 byte follows
+_truncated = b'\x0a\x10\x01'
+
+def _test_unpack_get_response():
+    r = proto.unpack_GetResponse(_get_response)
+    testing.assertEqual(len(r.notification), 1)
+    n = r.notification[0]
+    testing.assertEqual(n.timestamp, 1)
+    testing.assertEqual([d.elems[0].name for d in n.delete], ["a", "b"])
+    testing.assertEqual(len(n.update), 1)
+    testing.assertEqual(n.update[0].path.elems[0].name, "x")
+    v = n.update[0].val
+    if isinstance(v, proto.FloatValue):
+        testing.assertEqual(v.value, 1.5)
+    else:
+        testing.error("expected FloatValue, got " + str(v))
+
+def _test_unpack_get_response_no_val():
+    r = proto.unpack_GetResponse(_get_response_no_val)
+    v = r.notification[0].update[0].val
+    testing.assertTrue(isinstance(v, proto.NotSetValue), "expected NotSetValue, got " + str(v))
+
+def _test_unpack_get_response_json():
+    r = proto.unpack_GetResponse(_get_response_json)
+    v = r.notification[0].update[0].val
+    if isinstance(v, proto.JsonValue):
+        testing.assertEqual(list(v.value.keys()), ["a"])
+        a = v.value["a"]
+        if isinstance(a, int):
+            testing.assertEqual(a, 1)
+        else:
+            testing.error("expected int, got " + str(a))
+    else:
+        testing.error("expected JsonValue, got " + str(v))
+
+def _test_unpack_subscribe_response_sync():
+    r = proto.unpack_SubscribeResponse(_subscribe_response_sync)
+    testing.assertEqual(r.response_case, 3)
+    testing.assertTrue(r.sync_response)
+
+def _test_unpack_get_response_malformed():
+    try:
+        proto.unpack_GetResponse(_truncated)
+        testing.error("expected ValueError")
+    except ValueError:
+        pass
+
+def _test_unpack_subscribe_response_malformed():
+    try:
+        proto.unpack_SubscribeResponse(_truncated)
+        testing.error("expected ValueError")
+    except ValueError:
+        pass
+
+def _test_unpack_capability_response_malformed():
+    try:
+        proto.unpack_CapabilityResponse(_truncated)
+        testing.error("expected ValueError")
+    except ValueError:
+        pass
