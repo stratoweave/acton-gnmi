@@ -3,8 +3,8 @@ fingerprint = 0x21c13a9a49111a8a
 dependencies = {
     "grpc": (
         repo_url="https://github.com/actonlang/acton-grpc.git",
-        url="https://github.com/actonlang/acton-grpc/archive/fd48ef6d7b9703be6cf2bf325c4851bb81635619.zip",
-        hash="N-V-__8AAIQiAADyA4IFh5MYy5HFiIEB6Yri716i4TDPrrL_"
+        url="https://github.com/actonlang/acton-grpc/archive/0f1e9256c8baf7fc36ee5b22814f6b1e3df0aec4.zip",
+        hash="N-V-__8AAIQiAABQhFOnNohLecbv4QFnAfg3dHE6WFrGnVUl"
     ),
     "yang": (
         repo_url="https://github.com/stratoweave/acton-yang.git",
