@@ -410,9 +410,8 @@ def _test_gnmi_identityref_values():
     root = yang.compile([yid])
     leaf = root.get("protocol")
     if isinstance(leaf, yschema.DLeaf):
-        parsed = try_parse_gnmi_value(StringValue("ssh"), leaf, leaf.type, [], root)
-        if parsed is not None:
-            identity = parsed.val
+        identity = try_parse_gnmi_value(StringValue("ssh"), leaf, leaf.type, [], root)
+        if identity is not None:
             if isinstance(identity, Identityref):
                 testing.assertEqual(identity.val, "ssh")
             else:
@@ -420,9 +419,8 @@ def _test_gnmi_identityref_values():
         else:
             testing.error("Expected a parsed identityref")
 
-        parsed_leaf = try_parse_leaf_value("ssh", leaf, leaf.type, [], root)
-        if parsed_leaf is not None:
-            key_identity = parsed_leaf.val
+        key_identity = try_parse_leaf_value("ssh", leaf, leaf.type, [], root)
+        if key_identity is not None:
             if isinstance(key_identity, Identityref):
                 testing.assertEqual(key_identity.val, "ssh")
             else:
