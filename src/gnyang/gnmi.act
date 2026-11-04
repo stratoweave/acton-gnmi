@@ -85,23 +85,23 @@ extension proto.Notification(YangData):
             for keyname, keyval in new_prefix.elems[-1].keys:
                 schema_key = schema_keys.get(keyname)
                 if root is not None and schema_key is not None:
-                    tv = try_parse_leaf_value(keyval, schema_key, schema_key.type, new_path, root)
-                    if tv is not None:
-                        key[keyname] = tv.val
+                    parsed = try_parse_leaf_value(keyval, schema_key, schema_key.type, new_path, root)
+                    if parsed is not None:
+                        key[keyname] = parsed
 
             values.append((None, key, proto.Notification(self.timestamp, new_prefix, list_elem_updates[i], list_elem_deletes[i], self.atomic)))
 
         return values
 
-    def take_leaf(self, root: yschema.DRoot, schema: yschema.DLeaf, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
+    def take_leaf(self, root: yschema.DRoot, schema: yschema.DLeaf, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, val: ?value):
         new_path = path + [PathElement(schema)]
 
         updates, deletes = select_notif_paths(self, schema.name)
 
         if len(updates) == 1 and len(deletes) == 0:
-            tv = try_parse_gnmi_value(updates[0].val, schema, schema.type, new_path, root)
-            if tv is not None:
-                return (op=None, t=tv.t, val=tv.val)
+            parsed = try_parse_gnmi_value(updates[0].val, schema, schema.type, new_path, root)
+            if parsed is not None:
+                return (op=None, val=parsed)
 
         # A list key leaf usually has no update of its own: its value lives in the
         # path predicate (e.g. interface[name=mgmt0]). Recover it from the prefix's
@@ -109,16 +109,16 @@ extension proto.Notification(YangData):
         if len(self.prefix.elems) > 0:
             for k, v in self.prefix.elems[-1].keys:
                 if k == schema.name:
-                    tv = try_parse_leaf_value(v, schema, schema.type, new_path, root)
-                    if tv is not None:
-                        return (op=None, t=tv.t, val=tv.val)
+                    parsed = try_parse_leaf_value(v, schema, schema.type, new_path, root)
+                    if parsed is not None:
+                        return (op=None, val=parsed)
 
         return None
 
 
-    def take_leaflist(self, root: yschema.DRoot, schema: yschema.DLeafList, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
+    def take_leaflist(self, root: yschema.DRoot, schema: yschema.DLeafList, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, val: ?value)]:
         new_path = path + [PathElement(schema)]
-        values: list[(op: ?str, t: str, val: ?value)] = []
+        values: list[(op: ?str, val: ?value)] = []
 
         updates, deletes = select_notif_paths(self, schema.name)
 
@@ -137,9 +137,9 @@ extension proto.Notification(YangData):
             
             if isinstance(value, proto.LeafListValue):
                 for item in value.value:
-                    tv = try_parse_gnmi_value(item, schema, schema.type, new_path, root)
-                    if tv is not None:
-                        values.append((op=None, t=tv.t, val=tv.val))
+                    parsed = try_parse_gnmi_value(item, schema, schema.type, new_path, root)
+                    if parsed is not None:
+                        values.append((op=None, val=parsed))
 
         return values
 
@@ -173,21 +173,18 @@ def select_notif_paths(notification: proto.Notification, name: str) -> (list[pro
         [match.delete for match in deletes]
     )
 
-def try_parse_gnmi_value(gnmi_value: proto.TypedValue, schema_node: yschema.DNodeLeaf, schema_type: yschema.DType, path: list[PathElement], root: yschema.DRoot) -> ?(t: str, val: value):
+def try_parse_gnmi_value(gnmi_value: proto.TypedValue, schema_node: yschema.DNodeLeaf, schema_type: yschema.DType, path: list[PathElement], root: yschema.DRoot) -> ?value:
     """Parse a textual value according to the provided schema type.
 
     Returns:
-        (t, val): A typed tuple with the concrete type name and native value
-                  (e.g. ("uint8", 42)). For unions, returns the successful
-                  member type and parsed value.
+        The native value (e.g. 42 for a uint8). For unions, the value parsed
+        by the first member type that accepts it.
 
     Errors:
         Raises YangValidationError with a message including the formatted
         schema path (from the path parameter) and a textual description of the
         expected type (including range constraints if present).
     """
-    type_name = schema_type.builtin_type
-
     if isinstance(schema_type, yschema.DTypeUnion):
         for alt_type in schema_type.types:
             try:
@@ -200,7 +197,7 @@ def try_parse_gnmi_value(gnmi_value: proto.TypedValue, schema_node: yschema.DNod
     elif isinstance(schema_type, yschema.DTypeEmpty):
         # Empty leaf JSON encoding: [null]
         if isinstance(gnmi_value, proto.NotSetValue):
-            return (t=type_name, val=ygdata.Present())
+            return ygdata.Present()
         raise YangValidationError(path, schema_type, gnmi_value)
 
     val: ?value = None
@@ -272,27 +269,24 @@ def try_parse_gnmi_value(gnmi_value: proto.TypedValue, schema_node: yschema.DNod
             raise YangValidationError(path, schema_type, gnmi_value)
 
     if val is not None and schema_type.validate_value(val):
-        return (t=type_name, val=val)
+        return val
 
     raise YangValidationError(path, schema_type, gnmi_value)
 
     return None
 
-def try_parse_leaf_value(leaf_value: str, schema_node: yschema.DNodeLeaf, schema_type: yschema.DType, path: list[PathElement], root: yschema.DRoot) -> ?(t: str, val: value):
+def try_parse_leaf_value(leaf_value: str, schema_node: yschema.DNodeLeaf, schema_type: yschema.DType, path: list[PathElement], root: yschema.DRoot) -> ?value:
     """Parse a textual value according to the provided schema type.
 
     Returns:
-        (t, val): A typed tuple with the concrete type name and native value
-                  (e.g. ("uint8", 42)). For unions, returns the successful
-                  member type and parsed value.
+        The native value (e.g. 42 for a uint8). For unions, the value parsed
+        by the first member type that accepts it.
 
     Errors:
         Raises YangValidationError with a message including the formatted
         schema path (from the path parameter) and a textual description of the
         expected type (including range constraints if present).
     """
-    type_name = schema_type.builtin_type
-
     if isinstance(schema_type, yschema.DTypeUnion):
         for alt_type in schema_type.types:
             try:
@@ -305,7 +299,7 @@ def try_parse_leaf_value(leaf_value: str, schema_node: yschema.DNodeLeaf, schema
     elif isinstance(schema_type, yschema.DTypeEmpty):
         # Empty leaf JSON encoding: [null]
         if leaf_value == "":
-            return (t=type_name, val=ygdata.Present())
+            return ygdata.Present()
         raise YangValidationError(path, schema_type, leaf_value)
 
     val: ?value = None
@@ -349,7 +343,7 @@ def try_parse_leaf_value(leaf_value: str, schema_node: yschema.DNodeLeaf, schema
             raise YangValidationError(path, schema_type, leaf_value)
 
     if val is not None and schema_type.validate_value(val):
-        return (t=type_name, val=val)
+        return val
 
     raise YangValidationError(path, schema_type, leaf_value)
 
