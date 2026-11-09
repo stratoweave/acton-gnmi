@@ -75,3 +75,55 @@ def _test_unpack_capability_response_malformed():
         testing.error("expected ValueError")
     except ValueError:
         pass
+
+# The protobuf wire format, enough to build the gNMI messages of the tests.
+# Fields come in field number order, and empty strings, zero numbers and
+# false are left out, as protobuf-c packs proto3 messages.
+
+def _varint(n: int) -> bytes:
+    b = []
+    while n >= 128:
+        b.append(n % 128 + 128)
+        n = n // 128
+    b.append(n)
+    return bytes(b)
+
+def _ld(num: int, payload: bytes) -> bytes:
+    return _varint(num * 8 + 2) + _varint(len(payload)) + payload
+
+def _uint(num: int, n: int) -> bytes:
+    return _varint(num * 8) + _varint(n) if n != 0 else b''
+
+def _str(num: int, s: str) -> bytes:
+    return _ld(num, s.encode()) if s != '' else b''
+
+def _path(p: proto.Path) -> bytes:
+    b = _str(2, p.origin)
+    for e in p.elems:
+        eb = _str(1, e.name)
+        for key, value in e.keys:
+            eb += _ld(2, _str(1, key) + _str(2, value))
+        b += _ld(3, eb)
+    return b + _str(4, p.target)
+
+def _model(m: proto.ModelData) -> bytes:
+    return _str(1, m.name) + _str(2, m.organization) + _str(3, m.version)
+
+def _get_request(r: proto.GetRequest) -> bytes:
+    b = _ld(1, _path(r.prefix))
+    for p in r.path:
+        b += _ld(2, _path(p))
+    b += _uint(3, r.type) + _uint(5, r.encoding)
+    for m in r.use_models:
+        b += _ld(6, _model(m))
+    return b
+
+def _test_pack_get_request():
+    prefix = proto.Path([proto.PathElem("interfaces", [])], "openconfig", "dev1")
+    paths = [
+        proto.Path([proto.PathElem("interface", [("name", "eth0")]), proto.PathElem("state", [])]),
+        proto.Path([proto.PathElem("interface", [("name", "eth1")]), proto.PathElem("config", [])])
+    ]
+    models = [proto.ModelData("openconfig-interfaces", "OpenConfig", "3.0.0")]
+    r = proto.GetRequest(prefix, paths, proto.STATE, proto.PROTO, models)
+    testing.assertEqual(r.pack(), _get_request(r))
