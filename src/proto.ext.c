@@ -123,6 +123,7 @@ B_bytes gnmiQ_protoQ_pack_GetRequest(gnmiQ_protoQ_GetRequest acton_get_request) 
     path_acton_to_proto(get_request.prefix, acton_get_request->prefix);
 
     size_t n_path = acton_get_request->path->length;
+    get_request.n_path = n_path;
     get_request.path = acton_calloc(n_path, sizeof(Gnmi__Path*));
     for(size_t i = 0; i < n_path; ++i) {
         get_request.path[i] = acton_malloc(sizeof(Gnmi__Path));
