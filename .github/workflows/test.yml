@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+# Set default permission for all jobs to none
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout Repository"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The write barrier in src/proto.ext.c and the checker below need an
+      # Acton with the generational GC mode, so this installs tip.
+      - name: "Install Acton"
+        uses: actonlang/setup-acton@a60209fe62d49ae1ca455d69f31385b14e6fb26c # v1
+        with:
+          channel: tip
+
+      - name: "Run the tests"
+        run: acton test
+
+      # The test result cache does not tell GC modes apart, so without
+      # --no-cache this step would report the results of the step above.
+      - name: "Run the tests in generational GC mode"
+        run: acton test --no-cache
+        env:
+          ACTON_GC_MODE: generational
+
+      # The write-barrier checker runs each test in generational GC mode and
+      # exits with status 70 at a pointer store without its barrier. It makes
+      # the tests several times slower: --max-time 10000 gives each test 11 s
+      # instead of 3 s, and --min-iter 0 keeps a slow test at one run.
+      - name: "Run the tests under the write-barrier checker"
+        run: acton test --gc-check --min-iter 0 --max-time 10000

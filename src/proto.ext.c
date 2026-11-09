@@ -1,7 +1,11 @@
 #include "src/gnmi/gnmi/gnmi.pb-c.c"
 
+// protobuf-c's unpack stores new submessages, strings and byte buffers into
+// the arrays of repeated fields after it allocated them, without write
+// barriers, so the unpacked messages come from the kind that every collection
+// rescans.
 void *gnmi_acton_malloc_cb(void *mem_user_data, size_t size) {
-    return acton_malloc(size);
+    return acton_malloc_rescanned(size);
 }
 
 void gnmi_acton_free_cb(void *mem_user_data, void *ptr) {
@@ -17,33 +21,40 @@ void gnmiQ_protoQ___ext_init__() {
    // NOP
 }
 
+// proto_path may be reached through another GC object, so the stores into it
+// have barriers. The arrays and entries made here stay in locals while they
+// are filled, so the stores into them need none.
 int path_acton_to_proto(Gnmi__Path *proto_path, gnmiQ_protoQ_Path acton_path) {
 
-    proto_path->origin = (char*)fromB_str(acton_path->origin);
-    proto_path->target = (char*)fromB_str(acton_path->target);
+    ACTON_STORE(proto_path, proto_path->origin, (char*)fromB_str(acton_path->origin));
+    ACTON_STORE(proto_path, proto_path->target, (char*)fromB_str(acton_path->target));
 
     size_t n_elem = acton_path->elems->length; 
     gnmiQ_protoQ_PathElem *acton_elems = (gnmiQ_protoQ_PathElem*)(acton_path->elems->data); 
 
     proto_path->n_elem = n_elem;
-    proto_path->elem = acton_calloc(n_elem, sizeof(Gnmi__PathElem*));
+    Gnmi__PathElem **elems = acton_calloc(n_elem, sizeof(Gnmi__PathElem*));
+    ACTON_STORE(proto_path, proto_path->elem, elems);
     
     for (size_t i = 0; i < n_elem; ++i) {
-        Gnmi__PathElem *elem = proto_path->elem[i] = acton_malloc(sizeof(Gnmi__PathElem));
+        Gnmi__PathElem *elem = acton_malloc(sizeof(Gnmi__PathElem));
         gnmi__path_elem__init(elem);
-        proto_path->elem[i]->name = (char*)fromB_str(acton_elems[i]->name);
+        elem->name = (char*)fromB_str(acton_elems[i]->name);
     
         size_t n_key = acton_elems[i]->keys->length;
         elem->n_key = n_key;
-        elem->key = acton_calloc(n_key, sizeof(Gnmi__PathElem__KeyEntry*));
+        Gnmi__PathElem__KeyEntry **keys = acton_calloc(n_key, sizeof(Gnmi__PathElem__KeyEntry*));
+        elem->key = keys;
         B_tuple *acton_keys = (B_tuple*)acton_elems[i]->keys->data;
     
         for (size_t j = 0; j < n_key; ++j) {
-            elem->key[j] = acton_malloc(sizeof(Gnmi__PathElem__KeyEntry));
-            gnmi__path_elem__key_entry__init(elem->key[j]);
-            elem->key[j]->key = (char*)fromB_str(acton_keys[j]->components[0]);
-            elem->key[j]->value = (char*)fromB_str(acton_keys[j]->components[1]);
+            Gnmi__PathElem__KeyEntry *key = acton_malloc(sizeof(Gnmi__PathElem__KeyEntry));
+            gnmi__path_elem__key_entry__init(key);
+            key->key = (char*)fromB_str(acton_keys[j]->components[0]);
+            key->value = (char*)fromB_str(acton_keys[j]->components[1]);
+            keys[j] = key;
         }
+        elems[i] = elem;
     }
     return 0;
 }
@@ -123,6 +134,7 @@ B_bytes gnmiQ_protoQ_pack_GetRequest(gnmiQ_protoQ_GetRequest acton_get_request) 
     path_acton_to_proto(get_request.prefix, acton_get_request->prefix);
 
     size_t n_path = acton_get_request->path->length;
+    get_request.n_path = n_path;
     get_request.path = acton_calloc(n_path, sizeof(Gnmi__Path*));
     for(size_t i = 0; i < n_path; ++i) {
         get_request.path[i] = acton_malloc(sizeof(Gnmi__Path));
@@ -136,12 +148,13 @@ B_bytes gnmiQ_protoQ_pack_GetRequest(gnmiQ_protoQ_GetRequest acton_get_request) 
     Gnmi__ModelData **use_models = get_request.use_models = acton_calloc(n_use_models, sizeof(Gnmi__ModelData*));
 
     for (size_t i = 0; i < n_use_models; ++i) {
-        use_models[i] = acton_malloc(sizeof(Gnmi__ModelData));
-        gnmi__model_data__init(use_models[i]);
+        Gnmi__ModelData *model = acton_malloc(sizeof(Gnmi__ModelData));
+        gnmi__model_data__init(model);
 
-        use_models[i]->name = (char*)fromB_str(acton_use_models[i]->name);
-        use_models[i]->organization = (char*)fromB_str(acton_use_models[i]->organization);
-        use_models[i]->version = (char*)fromB_str(acton_use_models[i]->version);
+        model->name = (char*)fromB_str(acton_use_models[i]->name);
+        model->organization = (char*)fromB_str(acton_use_models[i]->organization);
+        model->version = (char*)fromB_str(acton_use_models[i]->version);
+        use_models[i] = model;
     }
 
     get_request.type = acton_get_request->type;
@@ -193,17 +206,19 @@ B_bytes gnmiQ_protoQ_pack_SubscribeRequest(gnmiQ_protoQ_SubscribeRequest acton_s
         Gnmi__Subscription **subscriptions = subscribe_request.subscribe->subscription = acton_calloc(n_subscription, sizeof(Gnmi__Subscription*));
 
         for (size_t i = 0; i < n_subscription; ++i) {
-            subscriptions[i] = acton_malloc(sizeof(Gnmi__Subscription));
-            gnmi__subscription__init(subscriptions[i]);
+            Gnmi__Subscription *subscription = acton_malloc(sizeof(Gnmi__Subscription));
+            gnmi__subscription__init(subscription);
 
-            subscriptions[i]->path = acton_malloc(sizeof(Gnmi__Path));
-            gnmi__path__init(subscriptions[i]->path);
-            path_acton_to_proto(subscriptions[i]->path, acton_subscriptions[i]->path);
+            Gnmi__Path *path = acton_malloc(sizeof(Gnmi__Path));
+            gnmi__path__init(path);
+            path_acton_to_proto(path, acton_subscriptions[i]->path);
+            subscription->path = path;
 
-            subscriptions[i]->mode = acton_subscriptions[i]->mode;
-            subscriptions[i]->sample_interval = acton_subscriptions[i]->sample_interval;
-            subscriptions[i]->suppress_redundant = acton_subscriptions[i]->suppress_redundant;
-            subscriptions[i]->heartbeat_interval = acton_subscriptions[i]->heartbeat_interval;
+            subscription->mode = acton_subscriptions[i]->mode;
+            subscription->sample_interval = acton_subscriptions[i]->sample_interval;
+            subscription->suppress_redundant = acton_subscriptions[i]->suppress_redundant;
+            subscription->heartbeat_interval = acton_subscriptions[i]->heartbeat_interval;
+            subscriptions[i] = subscription;
         }
 
         // models
@@ -213,12 +228,13 @@ B_bytes gnmiQ_protoQ_pack_SubscribeRequest(gnmiQ_protoQ_SubscribeRequest acton_s
         Gnmi__ModelData **use_models = subscribe_request.subscribe->use_models = acton_calloc(n_use_models, sizeof(Gnmi__ModelData*));
 
         for (size_t i = 0; i < n_use_models; ++i) {
-            use_models[i] = acton_malloc(sizeof(Gnmi__ModelData));
-            gnmi__model_data__init(use_models[i]);
+            Gnmi__ModelData *model = acton_malloc(sizeof(Gnmi__ModelData));
+            gnmi__model_data__init(model);
 
-            use_models[i]->name = (char*)fromB_str(acton_use_models[i]->name);
-            use_models[i]->organization = (char*)fromB_str(acton_use_models[i]->organization);
-            use_models[i]->version = (char*)fromB_str(acton_use_models[i]->version);
+            model->name = (char*)fromB_str(acton_use_models[i]->name);
+            model->organization = (char*)fromB_str(acton_use_models[i]->organization);
+            model->version = (char*)fromB_str(acton_use_models[i]->version);
+            use_models[i] = model;
         }
     }
     else {

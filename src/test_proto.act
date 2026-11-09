@@ -75,3 +75,254 @@ def _test_unpack_capability_response_malformed():
         testing.error("expected ValueError")
     except ValueError:
         pass
+
+# The protobuf wire format, enough to build the gNMI messages of the tests.
+# Fields come in field number order, and empty strings, zero numbers and
+# false are left out, as protobuf-c packs proto3 messages.
+
+def _varint(n: int) -> bytes:
+    b = []
+    while n >= 128:
+        b.append(n % 128 + 128)
+        n = n // 128
+    b.append(n)
+    return bytes(b)
+
+def _ld(num: int, payload: bytes) -> bytes:
+    return _varint(num * 8 + 2) + _varint(len(payload)) + payload
+
+def _uint(num: int, n: int) -> bytes:
+    return _varint(num * 8) + _varint(n) if n != 0 else b''
+
+def _str(num: int, s: str) -> bytes:
+    return _ld(num, s.encode()) if s != '' else b''
+
+def _path(p: proto.Path) -> bytes:
+    b = _str(2, p.origin)
+    for e in p.elems:
+        eb = _str(1, e.name)
+        for key, value in e.keys:
+            eb += _ld(2, _str(1, key) + _str(2, value))
+        b += _ld(3, eb)
+    return b + _str(4, p.target)
+
+def _model(m: proto.ModelData) -> bytes:
+    return _str(1, m.name) + _str(2, m.organization) + _str(3, m.version)
+
+def _get_request(r: proto.GetRequest) -> bytes:
+    b = _ld(1, _path(r.prefix))
+    for p in r.path:
+        b += _ld(2, _path(p))
+    b += _uint(3, r.type) + _uint(5, r.encoding)
+    for m in r.use_models:
+        b += _ld(6, _model(m))
+    return b
+
+def _test_pack_get_request():
+    prefix = proto.Path([proto.PathElem("interfaces", [])], "openconfig", "dev1")
+    paths = [
+        proto.Path([proto.PathElem("interface", [("name", "eth0")]), proto.PathElem("state", [])]),
+        proto.Path([proto.PathElem("interface", [("name", "eth1")]), proto.PathElem("config", [])])
+    ]
+    models = [proto.ModelData("openconfig-interfaces", "OpenConfig", "3.0.0")]
+    r = proto.GetRequest(prefix, paths, proto.STATE, proto.PROTO, models)
+    testing.assertEqual(r.pack(), _get_request(r))
+
+# Messages with many repeated fields, unpacked, converted and packed again
+# and again, so that a test run spans many collections. The tests check
+# every converted field, so an object that a collection freed while the
+# message still held it shows up as a wrong value or a crash.
+#
+# protobuf-c allocates the arrays of all repeated fields of a message
+# before it parses their elements, and it parses the fields in wire order.
+# The notifications here carry their deletes ahead of their updates, which
+# protobuf allows. The update array then waits in the heap while the
+# deletes are parsed, and a collection can mark it before protobuf-c fills
+# it. With 1100 updates the array is larger than half a heap block (16 KiB
+# by default) and gets blocks of its own, which no store into another
+# object marks as written.
+
+def _elems(n: int, tag: str) -> list[proto.PathElem]:
+    elems = []
+    for i in range(n):
+        keys = []
+        for j in range(i % 3):
+            keys.append((f"k{j}", f"{tag}.{i}.{j}"))
+        elems.append(proto.PathElem(f"e{i}", keys))
+    return elems
+
+def _models(n: int) -> list[proto.ModelData]:
+    return [proto.ModelData(f"model-{i}", f"org-{i % 7}", f"{i}.{i % 3}.0") for i in range(n)]
+
+def _value(i: int) -> (bytes, str):
+    """TypedValue number i, encoded and as _show shows its conversion"""
+    k = i % 8
+    if k == 0:
+        return (_str(1, f"s{i}"), f"str:s{i}")
+    elif k == 1:
+        return (_uint(2, i), f"int:{i}")
+    elif k == 2:
+        return (_uint(3, i), f"uint:{i}")
+    elif k == 3:
+        return (_uint(4, 1), "bool:True")
+    elif k == 4:
+        return (_str(5, f"b{i}"), f"bytes:b{i}")
+    elif k == 5:
+        return (_ld(7, _uint(1, i) + _uint(2, 2)), f"dec:{i}/2")
+    elif k == 6:
+        # a leaf-list of strings and unsigned integers
+        b = b''
+        shown = []
+        for j in range(1, i % 5 + 2):
+            if j % 2 == 0:
+                b += _ld(1, _str(1, f"l{i}.{j}"))
+                shown.append(f"str:l{i}.{j}")
+            else:
+                b += _ld(1, _uint(3, j))
+                shown.append(f"uint:{j}")
+        return (_ld(8, b), "[" + ", ".join(shown) + "]")
+    else:
+        return (_str(11, f'{{"n": {i}, "s": "j{i}"}}'), f"json:n={i},s=j{i}")
+
+def _show(v: proto.TypedValue) -> str:
+    if isinstance(v, proto.StringValue):
+        return "str:" + v.value
+    elif isinstance(v, proto.IntValue):
+        return f"int:{v.value}"
+    elif isinstance(v, proto.UIntValue):
+        return f"uint:{v.value}"
+    elif isinstance(v, proto.BoolValue):
+        return f"bool:{v.value}"
+    elif isinstance(v, proto.BytesValue):
+        return "bytes:" + v.value.decode()
+    elif isinstance(v, proto.DecimalValue):
+        return f"dec:{v.value.digits}/{v.value.precision}"
+    elif isinstance(v, proto.LeafListValue):
+        return "[" + ", ".join([_show(e) for e in v.value]) + "]"
+    elif isinstance(v, proto.JsonIetfValue):
+        return f"json:n={v.value['n']},s={v.value['s']}"
+    return str(v)
+
+def _notification(n: int, updates: int, deletes: int) -> (bytes, list[str]):
+    """Notification number n, its deletes ahead of its updates, encoded and
+    as _shown shows its conversion"""
+    prefix = proto.Path(_elems(2, f"p{n}"), f"o{n}", f"t{n}")
+    b = [_uint(1, n + 1), _ld(2, _path(prefix))]
+    lines = [f"{n + 1} {prefix}"]
+    deleted = []
+    for d in range(deletes):
+        path = proto.Path(_elems(d % 4 + 1, f"d{n}.{d}"))
+        b.append(_ld(5, _path(path)))
+        deleted.append(f"delete {path}")
+    for u in range(updates):
+        path = proto.Path(_elems(u % 4 + 1, f"u{n}.{u}"))
+        val, shown = _value(n * updates + u)
+        b.append(_ld(4, _ld(1, _path(path)) + _ld(3, val)))
+        lines.append(f"update {path} {shown}")
+    lines.extend(deleted)
+    return (b''.join(b), lines)
+
+def _shown(n: proto.Notification) -> list[str]:
+    lines = [f"{n.timestamp} {n.prefix}"]
+    for u in n.update:
+        lines.append(f"update {u.path} {_show(u.val)}")
+    for d in n.delete:
+        lines.append(f"delete {d}")
+    return lines
+
+def _assert_lines(got: list[str], want: list[str]):
+    for i in range(min([len(got), len(want)])):
+        if got[i] != want[i]:
+            testing.error(f"line {i}: got {got[i]}, want {want[i]}")
+    testing.assertEqual(len(got), len(want))
+
+def _get_response_msg(notifications: int, updates: int, deletes: int) -> (bytes, list[str]):
+    b = []
+    lines = []
+    for n in range(notifications):
+        nb, nl = _notification(n, updates, deletes)
+        b.append(_ld(1, nb))
+        lines.extend(nl)
+    return (b''.join(b), lines)
+
+_many_get_response, _many_get_response_lines = _get_response_msg(3, 1100, 400)
+
+def _test_unpack_get_response_many():
+    r = proto.unpack_GetResponse(_many_get_response)
+    lines = []
+    for n in r.notification:
+        lines.extend(_shown(n))
+    _assert_lines(lines, _many_get_response_lines)
+
+def _subscribe_responses(n: int, updates: int, deletes: int) -> (list[bytes], list[list[str]]):
+    msgs = []
+    lines = []
+    for i in range(n):
+        nb, nl = _notification(i, updates, deletes)
+        msgs.append(_ld(1, nb))
+        lines.append(nl)
+    return (msgs, lines)
+
+_many_subscribe_responses, _many_subscribe_response_lines = _subscribe_responses(3, 1100, 400)
+
+def _test_unpack_subscribe_response_many():
+    for i in range(len(_many_subscribe_responses)):
+        r = proto.unpack_SubscribeResponse(_many_subscribe_responses[i])
+        n = r.update
+        if n is not None:
+            _assert_lines(_shown(n), _many_subscribe_response_lines[i])
+        else:
+            testing.error("expected an update")
+
+def _capability_response(models: list[proto.ModelData], encodings: list[int], version: str) -> bytes:
+    b = [_ld(1, _model(m)) for m in models]
+    b.append(_ld(2, b''.join([_varint(e) for e in encodings])))
+    b.append(_str(3, version))
+    return b''.join(b)
+
+_many_models = _models(1500)
+_many_capability_response = _capability_response(_many_models, [0, 1, 2, 3, 4], "0.10.0")
+
+def _test_unpack_capability_response_many():
+    r = proto.unpack_CapabilityResponse(_many_capability_response)
+    _assert_lines([str(m) for m in r.supported_models], [str(m) for m in _many_models])
+    testing.assertEqual(r.supported_encodings, [0, 1, 2, 3, 4])
+    testing.assertEqual(r.gnmi_version, "0.10.0")
+
+def _paths(n: int, tag: str) -> list[proto.Path]:
+    return [proto.Path(_elems(i % 9 + 4, f"{tag}{i}"), f"o{i}" if i % 2 == 0 else "") for i in range(n)]
+
+_many_get_request = proto.GetRequest(proto.Path(_elems(3, "prefix"), "openconfig", "dev1"), _paths(40, "g") + [proto.Path(_elems(1100, "long"))], proto.CONFIG, proto.JSON_IETF, _models(20))
+_many_get_request_bytes = _get_request(_many_get_request)
+
+def _test_pack_get_request_many():
+    testing.assertEqual(_many_get_request.pack(), _many_get_request_bytes)
+
+def _subscribe_request(r: proto.SubscribeRequest) -> bytes:
+    s = r.subscribe
+    if s is not None:
+        b = [_ld(1, _path(s.prefix))]
+        for sub in s.subscriptions:
+            sb = _ld(1, _path(sub.path)) + _uint(2, sub.mode) + _uint(3, int(sub.sample_interval))
+            sb += _uint(4, 1 if sub.suppress_redundant else 0) + _uint(5, int(sub.heartbeat_interval))
+            b.append(_ld(2, sb))
+        b.append(_ld(4, _uint(1, int(s.qos))))
+        b.append(_uint(5, s.mode) + _uint(6, 1 if s.allow_aggregation else 0))
+        for m in s.use_models:
+            b.append(_ld(7, _model(m)))
+        b.append(_uint(8, s.encoding) + _uint(9, 1 if s.updates_only else 0))
+        return _ld(1, b''.join(b))
+    return _ld(3, b'')
+
+def _subscriptions(n: int) -> list[proto.Subscription]:
+    subs = []
+    for i in range(n):
+        path = proto.Path(_elems(i % 9 + 4, f"s{i}"))
+        subs.append(proto.Subscription(path, i % 3, u64(i * 1000000000), i % 2 == 0, u64(i % 4 * 60000000000)))
+    return subs
+
+_many_subscribe_request = proto.SubscribeRequest(proto.SubscriptionList(proto.Path(_elems(2, "sp"), "openconfig"), _subscriptions(300), u32(5), proto.POLL, True, _models(20), proto.PROTO, True))
+_many_subscribe_request_bytes = _subscribe_request(_many_subscribe_request)
+
+def _test_pack_subscribe_request_many():
+    testing.assertEqual(_many_subscribe_request.pack(), _many_subscribe_request_bytes)
