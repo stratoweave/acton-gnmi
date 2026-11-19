@@ -1,5 +1,5 @@
 import proto
-import base64
+import std.base64
 
 from yang.identityref import Identityref, PartialIdentityref
 from yang.type import Decimal
@@ -320,7 +320,7 @@ def try_parse_leaf_value(leaf_value: str, schema_node: yschema.DNodeLeaf, schema
             raise YangValidationError(path, schema_type, leaf_value)
     elif isinstance(schema_type, yschema.DTypeBinary):
         try:
-            val = base64.decode(leaf_value.encode())
+            val = std.base64.decode(leaf_value.encode())
         except ValueError:
             raise YangValidationError(path, schema_type, leaf_value)
     elif isinstance(schema_type, yschema.DTypeIdentityref):

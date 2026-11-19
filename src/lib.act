@@ -1,6 +1,6 @@
 import logging
 import net
-import base64
+import std.base64
 import grpc.grpc as grpc
 import proto
 
@@ -24,7 +24,7 @@ actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> 
         username, password = basic_creds
         #creds_str = f'{username}:{password}'
         #creds_enc = creds_str.encode()
-        #creds_b64: str = base64.encode(creds_enc).decode()
+        #creds_b64: str = std.base64.encode(creds_enc).decode()
         #auth_str: str = 'Basic ' + creds_b64
         additional_headers['username'] = username
         additional_headers['password'] = password
