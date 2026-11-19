@@ -4,13 +4,13 @@ import std.base64
 from yang.identityref import Identityref, PartialIdentityref
 from yang.type import Decimal
 from yang.data import from_data, from_data_recursive, YangData, PathElement, YangValidationError, format_schema_path
-from yang.data import unwrap_key, coerce_integer_value, fqname, fq_list_keys, parse_qualified_name, user_order
+from yang.data import unwrap_key, coerce_integer_value, parse_qualified_name, user_order
 import yang.gdata as ygdata
 import yang.schema as yschema
 
 extension proto.Notification(YangData):
 
-    def take_container(self, schema: yschema.DContainer, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, val: ?value):
+    def take_container(self, schema: yschema.DContainer, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, val: ?value):
         updates, deletes = select_notif_paths(self, schema.name)
         new_prefix = proto.Path(self.prefix.elems.copy(), self.prefix.origin, self.prefix.target)
         new_prefix.elems.append(proto.PathElem(schema.name, []))
@@ -21,7 +21,7 @@ extension proto.Notification(YangData):
             return "delete", proto.Notification(self.timestamp, new_prefix, updates, deletes, self.atomic)
         return None
 
-    def take_list(self, schema: yschema.DList, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
+    def take_list(self, schema: yschema.DList, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
         new_path = path + [PathElement(schema)]
 
         values: list[(op: ?str, key: dict[str, value], val: value)] = []
@@ -93,7 +93,7 @@ extension proto.Notification(YangData):
 
         return values
 
-    def take_leaf(self, root: yschema.DRoot, schema: yschema.DLeaf, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, val: ?value):
+    def take_leaf(self, root: yschema.DRoot, schema: yschema.DLeaf, ns_qualified: bool, path: list[PathElement]=[]) -> ?(op: ?str, val: ?value):
         new_path = path + [PathElement(schema)]
 
         updates, deletes = select_notif_paths(self, schema.name)
@@ -116,7 +116,7 @@ extension proto.Notification(YangData):
         return None
 
 
-    def take_leaflist(self, root: yschema.DRoot, schema: yschema.DLeafList, name: str, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, val: ?value)]:
+    def take_leaflist(self, root: yschema.DRoot, schema: yschema.DLeafList, ns_qualified: bool, path: list[PathElement]=[]) -> list[(op: ?str, val: ?value)]:
         new_path = path + [PathElement(schema)]
         values: list[(op: ?str, val: ?value)] = []
 
