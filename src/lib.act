@@ -8,8 +8,6 @@ import proto
 actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, insecure = False, log_handler: ?logging.Handler = None, tls_verify: bool = True, basic_creds: ?(str, str) = None):
 
     logh = logging.Handler("gnmi.Client")
-    if log_handler is not None:
-        logh.set_handler(log_handler)
     logger = logging.Logger(logh)
 
     def _on_connect(channel: grpc.Channel):
@@ -19,15 +17,7 @@ actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> 
 
     creds = None if insecure else grpc.TlsChannelCredentials()
 
-    additional_headers: dict[str, str] = {}
-    if basic_creds is not None:
-        username, password = basic_creds
-        #creds_str = f'{username}:{password}'
-        #creds_enc = creds_str.encode()
-        #creds_b64: str = std.base64.encode(creds_enc).decode()
-        #auth_str: str = 'Basic ' + creds_b64
-        additional_headers['username'] = username
-        additional_headers['password'] = password
+    additional_headers: dict[str, str] = {"username": basic_creds.0, "password": basic_creds.1} if basic_creds is not None else {}
 
     channel = grpc.Channel(cap, target, [], creds, None, _on_connect, _on_error, logh, tls_verify)
 
@@ -80,50 +70,55 @@ actor Client(cap: net.TCPConnectCap, target: str, on_connect: action(Client) -> 
         payload: bytes = request.pack()
         channel.stream_stream('/gnmi.gNMI/Subscribe', [request.pack()], _on_response, additional_headers=additional_headers)
 
+    def __startup__():
+        if log_handler is not None:
+            logh.set_handler(log_handler)
+
 
 actor main(env):
+    def __startup__():
 
-    logh = logging.Handler("gnmi.main")
-    logh.add_sink(logging.ConsoleSink())
-    logh.set_output_level(logging.WARNING)
-    logger = logging.Logger(logh)
+        logh = logging.Handler("gnmi.main")
+        logh.add_sink(logging.ConsoleSink())
+        logh.set_output_level(logging.WARNING)
+        logger = logging.Logger(logh)
 
-    target = env.argv[1]
-    insecure = False
-    if len(env.argv) > 2:
-        insecure = (env.argv[2] == 'True')
+        target = env.argv[1]
+        insecure = False
+        if len(env.argv) > 2:
+            insecure = (env.argv[2] == 'True')
 
-    basic_creds = None
-    if len(env.argv) > 4:
-        username = env.argv[3]
-        password = env.argv[4]
-        basic_creds = (username, password)
+        basic_creds = None
+        if len(env.argv) > 4:
+            username = env.argv[3]
+            password = env.argv[4]
+            basic_creds = (username, password)
 
-    def on_connect(c: Client):
-        print("Client connected", target)
-        #c.set()
-        def _on_capability_response(response: proto.CapabilityResponse):
-            print(response)
-        def _on_get_response(response: proto.GetResponse):
-            print(response)
-        def _on_subscribe_response(response: proto.SubscribeResponse):
-            print(response)
-        c.capabilities(_on_capability_response)
-        c.get(_on_get_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', [])]), [proto.Path([proto.PathElem('state', [])])], proto.ALL)
-        c.subscribe(_on_subscribe_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', [])]), [proto.Path([proto.PathElem('state', [])])], proto.STREAM, proto.SAMPLE, 5000000000)
-        #c.subscribe(_on_subscribe_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', []), proto.PathElem('state', [])]), [proto.Path([proto.PathElem('counters', []), proto.PathElem('in-pkts', [])]), proto.Path([proto.PathElem('counters', []), proto.PathElem('out-pkts', [])])], proto.STREAM, proto.SAMPLE, 5000000000)
-        #c.subscribe(_on_subscribe_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', []), proto.PathElem('state', [])]), [proto.Path([proto.PathElem('asdvhliuhdv', [])])], proto.STREAM, proto.SAMPLE, 5000000000)
-    def on_error(c: Client, e: str):
-        print("Error:", e)
+        def on_connect(c: Client):
+            print("Client connected", target)
+            #c.set()
+            def _on_capability_response(response: proto.CapabilityResponse):
+                print(response)
+            def _on_get_response(response: proto.GetResponse):
+                print(response)
+            def _on_subscribe_response(response: proto.SubscribeResponse):
+                print(response)
+            c.capabilities(_on_capability_response)
+            c.get(_on_get_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', [])]), [proto.Path([proto.PathElem('state', [])])], proto.ALL)
+            c.subscribe(_on_subscribe_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', [])]), [proto.Path([proto.PathElem('state', [])])], proto.STREAM, proto.SAMPLE, 5000000000)
+            #c.subscribe(_on_subscribe_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', []), proto.PathElem('state', [])]), [proto.Path([proto.PathElem('counters', []), proto.PathElem('in-pkts', [])]), proto.Path([proto.PathElem('counters', []), proto.PathElem('out-pkts', [])])], proto.STREAM, proto.SAMPLE, 5000000000)
+            #c.subscribe(_on_subscribe_response, proto.Path([proto.PathElem('openconfig-interfaces:interfaces', []), proto.PathElem('interface', []), proto.PathElem('state', [])]), [proto.Path([proto.PathElem('asdvhliuhdv', [])])], proto.STREAM, proto.SAMPLE, 5000000000)
+        def on_error(c: Client, e: str):
+            print("Error:", e)
 
-    client = Client(net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap))), target, on_connect, on_error, insecure=insecure, log_handler=logh, tls_verify=False, basic_creds=basic_creds)
+        client = Client(net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap))), target, on_connect, on_error, insecure=insecure, log_handler=logh, tls_verify=False, basic_creds=basic_creds)
 
-    #prefix: /openconfig-interfaces:interfaces/interface/state
-    #paths:
-    #  - counters/in-pkts
-    #  - counters/in-errors
-    #  - counters/out-pkts
-    #  - counters/out-errors
-    #mode: STREAM
-    #stream-mode: SAMPLE
-    #sample-interval: 5s
+        #prefix: /openconfig-interfaces:interfaces/interface/state
+        #paths:
+        #  - counters/in-pkts
+        #  - counters/in-errors
+        #  - counters/out-pkts
+        #  - counters/out-errors
+        #mode: STREAM
+        #stream-mode: SAMPLE
+        #sample-interval: 5s
