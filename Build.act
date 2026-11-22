@@ -3,12 +3,12 @@ fingerprint = 0x21c13a9a49111a8a
 dependencies = {
     "grpc": (
         repo_url="https://github.com/actonlang/acton-grpc.git",
-        url="https://github.com/actonlang/acton-grpc/archive/99e876a927f54b136b7c4f7f4847290b5bf7a532.zip",
-        hash="N-V-__8AAIQiAAB2Zi1udv-Y659zRQZj92spYlOMk5fv8Z4k"
+        url="https://github.com/actonlang/acton-grpc/archive/6e48806a59525d6217fd7c4dd4b60045eea8d2cc.zip",
+        hash="N-V-__8AAHkiAAA78k9Aw8S_CBotMyfAULkb-ClTeAcQYC2D"
     ),
     "yang": (
         repo_url="https://github.com/stratoweave/acton-yang.git",
-        url="https://github.com/stratoweave/acton-yang/archive/c7c003dd9bbd0346615c47078af2496a296b487b.zip",
-        hash="N-V-__8AAKlYKwDxQdceQAOqPhrbpfezBWSzMDgdySigfiwF"
+        url="https://github.com/stratoweave/acton-yang/archive/b1e2eed353566596bf6d5eb06ecc54ea8740f5f8.zip",
+        hash="N-V-__8AADqhKwCoa6HXrzbj7QMlHIbO_23OOGavORA_AfFe"
     )
 }
