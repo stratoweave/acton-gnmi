@@ -3,7 +3,8 @@
 // protobuf-c's unpack stores new submessages, strings and byte buffers into
 // the arrays of repeated fields after it allocated them, without write
 // barriers, so the unpacked messages come from the kind that every collection
-// rescans.
+// rescans. Acton values can retain immutable fields because the unpacked
+// message is left to the GC.
 void *gnmi_acton_malloc_cb(void *mem_user_data, size_t size) {
     return acton_malloc_rescanned(size);
 }
@@ -62,7 +63,7 @@ int path_acton_to_proto(Gnmi__Path *proto_path, gnmiQ_protoQ_Path acton_path) {
 gnmiQ_protoQ_Path path_proto_to_acton(Gnmi__Path *proto_path) {
     // prefix (and other path fields) are optional in gNMI; absent => NULL here.
     if (proto_path == NULL) {
-        return gnmiQ_protoQ_PathG_new(B_listD_new(0), to$str(""), to$str(""));
+        return gnmiQ_protoQ_PathG_new(B_listD_new(0), actStrFromCString(""), actStrFromCString(""));
     }
     size_t n_elem = proto_path->n_elem;
     B_list elems = B_listD_new(n_elem);
@@ -76,14 +77,14 @@ gnmiQ_protoQ_Path path_proto_to_acton(Gnmi__Path *proto_path) {
         for (size_t j = 0; j < n_key; ++j) {
             char *key = proto_path->elem[i]->key[j]->key;
             char *value = proto_path->elem[i]->key[j]->value;
-            B_tuple pair = $NEWTUPLE(2, to$str(key), to$str(value));
+            B_tuple pair = $NEWTUPLE(2, actStrFromCString(key), actStrFromCString(value));
             key_wit->$class->append(key_wit, keys, pair);
         }
-        elem_wit->$class->append(elem_wit, elems, gnmiQ_protoQ_PathElemG_new(to$str(proto_path->elem[i]->name), keys));
+        elem_wit->$class->append(elem_wit, elems, gnmiQ_protoQ_PathElemG_new(actStrFromCString(proto_path->elem[i]->name), keys));
     }
 
-    B_str origin = to$str(proto_path->origin);
-    B_str target = to$str(proto_path->target);
+    B_str origin = actStrFromCString(proto_path->origin);
+    B_str target = actStrFromCString(proto_path->target);
 
     gnmiQ_protoQ_Path acton_path = gnmiQ_protoQ_PathG_new(elems, origin, target);
 
@@ -100,9 +101,9 @@ gnmiQ_protoQ_CapabilityResponse gnmiQ_protoQ_unpack_CapabilityResponse(B_bytes d
     B_list supported_models = B_listD_new(n_supported_models);
     B_Sequence supported_models_wit = (B_Sequence)B_SequenceD_listG_witness;
     for (size_t i = 0; i < n_supported_models; ++i) {
-        B_str name = to$str(proto_supported_models[i]->name);
-        B_str organization = to$str(proto_supported_models[i]->organization);
-        B_str version = to$str(proto_supported_models[i]->version);
+        B_str name = actStrFromCString(proto_supported_models[i]->name);
+        B_str organization = actStrFromCString(proto_supported_models[i]->organization);
+        B_str version = actStrFromCString(proto_supported_models[i]->version);
         gnmiQ_protoQ_ModelData model = gnmiQ_protoQ_ModelDataG_new(name, organization, version);
         supported_models_wit->$class->append(supported_models_wit, supported_models, model);
     }
@@ -115,7 +116,7 @@ gnmiQ_protoQ_CapabilityResponse gnmiQ_protoQ_unpack_CapabilityResponse(B_bytes d
         supported_encodings_wit->$class->append(supported_encodings_wit, supported_encodings, encoding);
     }
 
-    B_str gnmi_version = to$str(proto_capability_response->gnmi_version);
+    B_str gnmi_version = actStrFromCString(proto_capability_response->gnmi_version);
 
     gnmiQ_protoQ_CapabilityResponse capability_response = gnmiQ_protoQ_CapabilityResponseG_new(supported_models, supported_encodings, gnmi_version);
     return capability_response;
@@ -165,7 +166,7 @@ B_bytes gnmiQ_protoQ_pack_GetRequest(gnmiQ_protoQ_GetRequest acton_get_request) 
     uint8_t *buffer = acton_malloc(buffer_size);
     gnmi__get_request__pack(&get_request, buffer);
 
-    B_bytes ret = to$bytesD_len((char*)buffer, buffer_size);
+    B_bytes ret = actBytesFromCStringLength((char *)buffer, buffer_size);
 
     return ret;
 }
@@ -248,7 +249,7 @@ B_bytes gnmiQ_protoQ_pack_SubscribeRequest(gnmiQ_protoQ_SubscribeRequest acton_s
     uint8_t *buffer = acton_malloc(buffer_size);
     gnmi__subscribe_request__pack(&subscribe_request, buffer);
 
-    B_bytes ret = to$bytesD_len((char*)buffer, buffer_size);
+    B_bytes ret = actBytesFromCStringLength((char *)buffer, buffer_size);
 
     return ret;
 }
@@ -282,7 +283,7 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_NotSetValueG_new();
             break;
         case GNMI__TYPED_VALUE__VALUE_STRING_VAL:
-            b_str_val = to$str(val->string_val);
+            b_str_val = actStrFromCString(val->string_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_StringValueG_new(b_str_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_INT_VAL:
@@ -299,7 +300,7 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             break;
         case GNMI__TYPED_VALUE__VALUE_BYTES_VAL:
             bytes_val = val->bytes_val;
-            b_bytes_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
+            b_bytes_val = actBytesFromCStringLength((char *)bytes_val.data, bytes_val.len);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_BytesValueG_new(b_bytes_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_FLOAT_VAL:
@@ -329,31 +330,31 @@ gnmiQ_protoQ_TypedValue typed_val_proto_to_acton(Gnmi__TypedValue* val) {
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_LeafListValueG_new(list_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_ANY_VAL:
-            type_url = to$str(val->any_val->type_url);
+            type_url = actStrFromCString(val->any_val->type_url);
             bytes_val = val->any_val->value;
-            acton_bytes_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
+            acton_bytes_val = actBytesFromCStringLength((char *)bytes_val.data, bytes_val.len);
             any_val = gnmiQ_protoQ_AnyG_new(type_url, acton_bytes_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_AnyValueG_new(any_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_JSON_VAL:
             bytes_val = val->json_val;
-            string_val = actStrFromCStringLengthCopy((char*)bytes_val.data, bytes_val.len);
+            string_val = actStrFromCStringLengthCopy((const char *)bytes_val.data, bytes_val.len);
             json_val = stdQ_jsonQ_decode(string_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_JsonValueG_new(json_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_JSON_IETF_VAL:
             bytes_val = val->json_ietf_val;
-            string_val = actStrFromCStringLengthCopy((char*)bytes_val.data, bytes_val.len);
+            string_val = actStrFromCStringLengthCopy((const char *)bytes_val.data, bytes_val.len);
             json_val = stdQ_jsonQ_decode(string_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_JsonIetfValueG_new(json_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_ASCII_VAL:
-            ascii_val = to$str(val->ascii_val);
+            ascii_val = actStrFromCString(val->ascii_val);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_AsciiValueG_new(ascii_val);
             break;
         case GNMI__TYPED_VALUE__VALUE_PROTO_BYTES:
             bytes_val = val->proto_bytes;
-            proto_val = to$bytesD_len((char*)bytes_val.data, bytes_val.len);
+            proto_val = actBytesFromCStringLength((char *)bytes_val.data, bytes_val.len);
             typed_val = (gnmiQ_protoQ_TypedValue)gnmiQ_protoQ_ProtoBytesValueG_new(proto_val);
             break;
         default:
