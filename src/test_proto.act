@@ -200,7 +200,11 @@ def _show(v: proto.TypedValue) -> str:
     elif isinstance(v, proto.LeafListValue):
         return "[" + ", ".join([_show(e) for e in v.value]) + "]"
     elif isinstance(v, proto.JsonIetfValue):
-        return f"json:n={v.value['n']},s={v.value['s']}"
+        number = v.value['n']
+        text = v.value['s']
+        if isinstance(number, int) and isinstance(text, str):
+            return f"json:n={number},s={text}"
+        testing.error("expected integer n and string s in JSON payload")
     return str(v)
 
 def _notification(n: int, updates: int, deletes: int) -> (bytes, list[str]):

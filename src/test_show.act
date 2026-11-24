@@ -1,0 +1,45 @@
+import testing
+import proto
+
+
+def _test_show_paths_and_models():
+    path = proto.Path([proto.PathElem("interface", [("name", "eth0")])], "openconfig", "router")
+    testing.assertEqual(str(path), "Path(/interface[name=eth0], origin=openconfig, target=router)")
+    model = proto.ModelData("interfaces", "example", "2026-01-01")
+    testing.assertEqual(str(model), "ModelData(interfaces, example, 2026-01-01)")
+    testing.assertEqual(repr(model), str(model))
+
+
+def _test_show_typed_values():
+    # The list element type is TypedValue, so Show must retain subtype dispatch.
+    values: list[proto.TypedValue] = [
+        proto.NotSetValue(), proto.StringValue("hello"), proto.IntValue(7),
+        proto.UIntValue(u64(8)), proto.BoolValue(False), proto.FloatValue(1.5),
+        proto.DoubleValue(2.5), proto.DecimalValue(proto.Decimal64(272, u32(2)))
+    ]
+    testing.assertEqual([str(item) for item in values], [
+        "NotSetValue()", "StringValue('hello')", "IntValue(7)", "UintValue(8)",
+        "BoolValue(False)", "FloatValue(1.5)", "DoubleValue(2.5)",
+        "DecimalValue(Decimal64(2.72))"
+    ])
+    testing.assertTrue(repr(values[1]).startswith("<gnmi.proto.StringValue object at "))
+    testing.assertEqual(str(proto.LeafListValue([])), "LeafListValue([])")
+
+
+def _test_show_nested_notification():
+    path = proto.Path([proto.PathElem("x", [])])
+    update = proto.Update(path, proto.IntValue(7), u32(0))
+    notification = proto.Notification(1, path, [update], [], False)
+    testing.assertEqual(str(notification),
+        "Notification(1, Path(/x, origin=, target=), " +
+        "[Update(Path(/x, origin=, target=), IntValue(7), 0)], [], False)")
+
+
+def _test_show_json_values():
+    data: dict[str, value] = {"payload": [1, "two", True, None]}
+    testing.assertEqual(str(proto.JsonValue(data)),
+        "JsonValue({{'payload': [1, 'two', True, None]}})")
+    nested: dict[str, value] = {"object": {"n": 7}}
+    testing.assertEqual(str(proto.JsonValue(nested)), "JsonValue({{'object': {{'n': 7}}}})")
+    item: proto.TypedValue = proto.JsonIetfValue({"n": 7})
+    testing.assertEqual(str(item), "JsonIetfValue({{'n': 7}})")

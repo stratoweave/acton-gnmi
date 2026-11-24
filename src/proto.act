@@ -1,4 +1,32 @@
 import std.json as json
+
+# JSON payloads erase their element types. Recover the JSON scalar and
+# container policies here rather than using Show[value]'s default renderer.
+def _repr_json_value(item: ?value) -> str:
+    if item is None:
+        return "None"
+    if isinstance(item, bool):
+        return repr(item)
+    if isinstance(item, int):
+        return repr(item)
+    if isinstance(item, u64):
+        return repr(item)
+    if isinstance(item, bigint):
+        return repr(item)
+    if isinstance(item, float):
+        return repr(item)
+    if isinstance(item, str):
+        return repr(item)
+    if isinstance(item, list):
+        parts: list[?value] = item
+        return "[" + ", ".join([_repr_json_value(part) for part in parts]) + "]"
+    if isinstance(item, dict):
+        # JSON objects have string keys; keep that type after the class test.
+        fields: dict[str, ?value] = item
+        return "{{" + ", ".join([repr(key) + ": " + _repr_json_value(val)
+                                 for key, val in fields.items()]) + "}}"
+    return repr(item)
+
 #Encodings
 JSON = 0
 BYTES = 1
@@ -24,9 +52,15 @@ class Any:
         self.type_url = type_url
         self.value = val
 
+
+extension Any(Show):
     def __str__(self):
         return f'Any({self.type_url}, {self.value})'
-    
+
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
+
 class Decimal64:
     digits: int
     precision: u32
@@ -35,10 +69,16 @@ class Decimal64:
         self.digits = digits
         self.precision = precision
 
+
+extension Decimal64(Show):
     def __str__(self):
         integer_digits = self.digits // (10**int(self.precision))
         decimal_digits = self.digits % (10**int(self.precision))
         return f'Decimal64({integer_digits}.{decimal_digits})'
+
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 class PathElem:
     name: str
@@ -48,12 +88,18 @@ class PathElem:
         self.name = name
         self.keys = keys
 
+
+extension PathElem(Show):
     def __str__(self):
         formatted_keys = ''
         for pair in self.keys:
             key, val = pair
             formatted_keys += f'[{key}={val}]'
         return f'/{self.name}{formatted_keys}'
+
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 extension PathElem(Eq):
 
@@ -87,12 +133,18 @@ class Path:
         self.origin = origin
         self.target = target
 
+
+extension Path(Show):
     def __str__(self):
         xpath = ''
         for elem in self.elems:
             xpath += str(elem)
 
         return f'Path({xpath}, origin={self.origin}, target={self.target})'
+
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 extension Path(Eq):
     def __eq__(self, other):
@@ -121,11 +173,14 @@ class ModelData:
         self.organization = organization
         self.version = version
 
+
+extension ModelData(Show):
     def __str__(self):
         return f'ModelData({self.name}, {self.organization}, {self.version})'
 
     def __repr__(self):
         return self.__str__()
+
 
 VALUE__NOT_SET = 0,
 VALUE_STRING_VAL = 1,
@@ -144,15 +199,23 @@ VALUE_ASCII_VAL = 12,
 VALUE_PROTO_BYTES = 13
 
 class TypedValue:
-
-    def __str__(self):
+    # Keep subtype rendering through base-typed fields, such as Update.val.
+    def format(self):
         return f'TypedValue()'
+
+extension TypedValue(Show):
+    def __str__(self) -> str:
+        return self.format()
+
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 class NotSetValue(TypedValue):
      def __init__(self):
          pass
 
-     def __str__(self):
+     def format(self):
          return f'NotSetValue()'
 
 class StringValue(TypedValue):
@@ -161,7 +224,7 @@ class StringValue(TypedValue):
     def __init__(self, val: str):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'StringValue(\'{self.value}\')'
 
 class IntValue(TypedValue):
@@ -170,7 +233,7 @@ class IntValue(TypedValue):
     def __init__(self, val: int):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'IntValue({self.value})'
 
 class UIntValue(TypedValue):
@@ -179,7 +242,7 @@ class UIntValue(TypedValue):
     def __init__(self, val: u64):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'UintValue({self.value})'
 
 class BoolValue(TypedValue):
@@ -188,7 +251,7 @@ class BoolValue(TypedValue):
     def __init__(self, val: bool):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'BoolValue({self.value})'
 
 class BytesValue(TypedValue):
@@ -197,7 +260,7 @@ class BytesValue(TypedValue):
     def __init__(self, val: bytes):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'BytesValue({self.value})'
 
 class FloatValue(TypedValue):
@@ -206,7 +269,7 @@ class FloatValue(TypedValue):
     def __init__(self, val: float):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'FloatValue({self.value})'
 
 class DoubleValue(TypedValue):
@@ -215,7 +278,7 @@ class DoubleValue(TypedValue):
     def __init__(self, val: float):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'DoubleValue({self.value})'
 
 class DecimalValue(TypedValue):
@@ -224,7 +287,7 @@ class DecimalValue(TypedValue):
     def __init__(self, val: Decimal64):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'DecimalValue({self.value})'
 
 class LeafListValue(TypedValue):
@@ -233,7 +296,7 @@ class LeafListValue(TypedValue):
     def __init__(self, val: list[TypedValue]):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'LeafListValue({self.value})'
 
 class AnyValue(TypedValue):
@@ -242,7 +305,7 @@ class AnyValue(TypedValue):
     def __init__(self, val: Any):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'AnyValue({self.value})'
 
 class JsonValue(TypedValue):
@@ -251,8 +314,8 @@ class JsonValue(TypedValue):
     def __init__(self, val: dict[str, value]):
         self.value = val
 
-    def __str__(self):
-        return f'JsonValue({self.value})'
+    def format(self):
+        return f'JsonValue({_repr_json_value(self.value)})'
 
 class JsonIetfValue(TypedValue):
     value: dict[str, value]
@@ -260,8 +323,8 @@ class JsonIetfValue(TypedValue):
     def __init__(self, val: dict[str, value]):
         self.value = val
 
-    def __str__(self):
-        return f'JsonIetfValue({self.value})'
+    def format(self):
+        return f'JsonIetfValue({_repr_json_value(self.value)})'
 
 class AsciiValue(TypedValue):
     value: str
@@ -269,7 +332,7 @@ class AsciiValue(TypedValue):
     def __init__(self, val: str):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'AsciiValue({self.value})'
 
 class ProtoBytesValue(TypedValue):
@@ -278,7 +341,7 @@ class ProtoBytesValue(TypedValue):
     def __init__(self, val: bytes):
         self.value = val
 
-    def __str__(self):
+    def format(self):
         return f'ProtoBytesValue({self.value})'
 
 class Notification:
@@ -295,6 +358,8 @@ class Notification:
         self.delete = delete
         self.atomic = atomic
 
+
+extension Notification(Show):
     def __str__(self):
         updates_str = '['
         last = len(self.update) - 1
@@ -306,6 +371,10 @@ class Notification:
 
         return f'Notification({self.timestamp}, {self.prefix}, {updates_str}, {self.delete}, {self.atomic})'
 
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
+
 class Update:
     path: Path
     val: TypedValue
@@ -316,9 +385,14 @@ class Update:
         self.val = val
         self.duplicates = duplicates
 
+
+extension Update(Show):
     def __str__(self):
         return f'Update({self.path}, {self.val}, {self.duplicates})'
 
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 def pack_CapabilityRequest(p: CapabilityRequest) -> bytes:
     return b''
@@ -346,11 +420,17 @@ class CapabilityResponse:
         self.supported_encodings = supported_encodings
         self.gnmi_version = gnmi_version
 
+    def pack(self) -> bytes:
+        return pack_CapabilityResponse(self)
+
+
+extension CapabilityResponse(Show):
     def __str__(self):
         return f'CapabilityResponse({self.supported_models}, {self.supported_encodings}, {self.gnmi_version})'
 
-    def pack(self) -> bytes:
-        return pack_CapabilityResponse(self)
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 ALL = 0
 CONFIG = 1
@@ -371,11 +451,17 @@ class GetRequest:
         self.encoding = encoding
         self.use_models = use_models
 
+    def pack(self) -> bytes:
+        return pack_GetRequest(self)
+
+
+extension GetRequest(Show):
     def __str__(self):
         return f'GetRequest({self.prefix}, {self.path}, {self.type}, {self.encoding}, {self.use_models})'
 
-    def pack(self) -> bytes:
-        return pack_GetRequest(self)
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 def pack_GetRequest(p: GetRequest) -> bytes:
     NotImplemented
@@ -392,11 +478,17 @@ class GetResponse:
     def __init__(self, notification):
         self.notification = notification
 
+    def pack(self) -> bytes:
+        return pack_GetResponse(self)
+
+
+extension GetResponse(Show):
     def __str__(self):
         return f'GetResponse({self.notification})'
 
-    def pack(self) -> bytes:
-        return pack_GetResponse(self)
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 def pack_SetRequest(p: SetRequest) -> bytes:
     return b''
@@ -489,8 +581,14 @@ class SubscribeResponse:
         self.update = update
         self.sync_response = sync_response
 
+    def pack(self) -> bytes:
+        return pack_SubscribeResponse(self)
+
+
+extension SubscribeResponse(Show):
     def __str__(self):
         return f'SubscribeResponse({self.response_case}, {self.update}, {self.sync_response})'
 
-    def pack(self) -> bytes:
-        return pack_SubscribeResponse(self)
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
